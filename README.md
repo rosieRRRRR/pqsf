@@ -9,6 +9,255 @@ An Open Standard for Deterministic Post-Quantum Security Primitives for Internet
 **Date:** November 2025
 **Licence:** Apache License 2.0 — Copyright 2025 rosiea
 
+
+---
+
+# **SUMMARY**
+
+The Post-Quantum Security Framework (PQSF) defines deterministic, post-quantum-safe primitives for transport, authorisation, and decision-making across heterogeneous environments. It replaces trust in local clocks, operating-system state, coordinators, cloud services, and identity intermediaries with cryptographically verifiable constructs that behave identically across all compliant implementations.
+
+PQSF’s goal is to give systems **user sovereignty**, **strong privacy guarantees**, and **cross-implementation consistency** without depending on DNS, NTP, PKI, or trusted hosts. It does this by explicitly defining time, consent, policy, runtime-state, and structure validity as first-class protocol elements.
+
+## **Core Problem and Operating Model**
+
+Traditional Internet security depends on assumptions that are often false: system clocks can be modified, OS state can be tampered with, UI consent can be forged, and identity services can leak or be unavailable. Replay, rollback, downgrade, and drift attacks remain possible because critical information is not verifiable in a deterministic way.
+
+PQSF removes these assumptions. Every sensitive operation must pass a unified predicate set:
+
+```
+valid_tick
+AND valid_consent
+AND valid_policy
+AND valid_runtime     (optional: PQVL)
+AND valid_quorum      (child-spec)
+AND valid_ledger
+AND valid_structure
+```
+
+If any element fails, the system fails-closed.
+
+Key design principles include deterministic behaviour, canonical encoding, post-quantum safety, explicit time binding, exporter-bound sessions, OS-agnostic logic, and stateless transport.
+
+## **The Three Core Authorities**
+
+### **1. EpochTick — Temporal Authority**
+
+A signed, verifiable timestamp that replaces untrusted system time.
+Ticks must be **fresh** (≤ 900 s), **monotonic**, and signed using **ML-DSA-65**.
+All consent, policy, ledger, and runtime decisions are bound to the active tick and its pinned Epoch Clock profile.
+
+### **2. ConsentProof — Intent Authority**
+
+Explicit, cryptographically authenticated user intent.
+Bound to:
+
+* a specific action
+* a session exporter_hash
+* a fresh EpochTick
+* an ML-DSA-65 signature
+* a deterministic, canonical structure
+
+This prevents replay across sessions or contexts.
+
+### **3. Policy Enforcer — Policy Authority**
+
+Deterministic evaluation of allowlists, denylists, thresholds, limits, time windows, and constraints.
+Policies must be canonicalised and hashed with **SHAKE256-256**, ensuring they cannot be modified without detection.
+
+## **Transport, Encoding, and Cryptography**
+
+### **Encrypted-Before-Transport (EBT)**
+
+A universal rule: all sensitive artefacts must be encrypted *before* entering any transport, including TLSE-EMP, STP, or cloud storage.
+Hosts and intermediaries cannot access plaintext.
+
+### **Transport Profiles**
+
+* **TLSE-EMP** — deterministic TLS 1.3 profile enforcing exporter binding, replay resistance, and downgrade detection.
+* **STP (Sovereign Transport Protocol)** — DNS-free, offline-capable transport with deterministic framing for sovereign and air-gapped environments.
+
+### **Canonical Encoding**
+
+All PQSF objects use deterministic **CBOR** or **JCS JSON**, eliminating ambiguity and ensuring consistent hashing, signatures, and structure-validation across implementations.
+
+### **Post-Quantum Cryptography**
+
+* Signatures: **ML-DSA-65**
+* Hashing: **SHAKE256-256**
+* Derivation: **cSHAKE256** with domain separation
+* Optional encryption: **ML-KEM-1024**, AES-256-GCM, or XChaCha20-Poly1305
+
+### **Deterministic Ledger**
+
+An append-only Merkle ledger with freeze-on-error semantics, recording tick validation, consent events, policy rotations, runtime results, and profile changes.
+Ensures integrity and strict monotonic history.
+
+---
+
+## **INDEX**
+
+[ABSTRACT](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#abstract)
+
+[PROBLEM STATEMENT](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#problem-statement)
+
+[PURPOSE](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#purpose)
+
+[WHAT THIS SPECIFICATION COVERS](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#what-this-specification-covers)
+
+---
+
+## **2. ARCHITECTURE**
+
+[2. ARCHITECTURE OVERVIEW](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#2-architecture-overview-normative)
+
+[2.1 Components](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#21-components)
+
+[2.2 Minimal Compliance](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#22-minimal-compliance)
+
+[2.3 Design Principles](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#23-design-principles)
+
+[2.4 Device Identity](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#24-device-identity-in-pqsf-consumers-informative)
+
+[2.5 Independence from Central Infrastructure](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#25-independence-from-central-infrastructure-informative)
+
+---
+
+## **3. CRYPTOGRAPHIC PRIMITIVES**
+
+[3.1 Hash Functions](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#31-hash-functions)
+
+[3.2 Key Derivation](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#32-key-derivation)
+
+[3.3 Universal Secret Derivation](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#33-universal-secret-derivation-normative)
+
+[3.4 Post-Quantum Signatures](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#34-post-quantum-signatures)
+
+[3.5 Canonical Encoding](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#35-canonical-encoding)
+
+---
+
+## **4. TEMPORAL AUTHORITY — EPOCH TICK**
+
+[4. Temporal Authority — EpochTick](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#4-temporal-authority--epoch-tick-normative)
+
+[4.1 Tick Structure](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#41-tick-structure)
+
+[4.2 Profile Structure & Lineage](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#42-profile-structure--parentchild-clock-selection)
+
+[4.3 Freshness Rule](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#43-freshness-rule-tick-age-limit)
+
+[4.4 Monotonicity](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#44-monotonicity)
+
+[4.5 profile_ref Validation](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#45-profile_ref-validation)
+
+[4.6 TickCache](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#46-tickcache)
+
+---
+
+## **5. INTENT AUTHORITY — CONSENTPROOF**
+
+[5. Intent Authority — ConsentProof](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#5-intent-authority--consentproof-normative)
+
+[5.1 Structure](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#51-structure)
+
+[5.2 Canonicalisation](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#52-canonicalisation)
+
+[5.3 Tick Binding](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#53-tick-binding)
+
+[5.4 Exporter Binding](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#54-exporter-binding-session-binding)
+
+[5.5 Role Binding](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#55-role-binding)
+
+[5.6 Signature Requirements](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#56-signature-requirements)
+
+---
+
+## **6. POLICY AUTHORITY — POLICY ENFORCER**
+
+[6. Policy Authority — Policy Enforcer](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#6-policy-authority--policy-enforcer-normative)
+
+[6.1 Structure](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#61-structure)
+
+[6.2 Canonicalisation](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#62-canonicalisation)
+
+[6.3 Required Predicates](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#63-required-predicates)
+
+[6.4 Tick-Dependent Rules](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#64-tick-dependent-rules)
+
+[6.5 Allowlist / Denylist Enforcement](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#65-allowlist--denylist-enforcement)
+
+[6.6 Threshold & Constraint Rules](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#66-threshold--constraint-rules)
+
+[6.7 Signature Bundles](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#67-signature-bundles)
+
+---
+
+## **7. TRANSPORT SECURITY — TLSE-EMP & STP**
+
+[7. Transport Security](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#7-transport-security--tlse-emp-and-stp-normative)
+
+[7.1 TLSE-EMP](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#71-tlse-emp-deterministic-tls)
+
+[7.2 Exporter Hash Derivation](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#72-exporter-hash-derivation-normative)
+
+[7.3 Downgrade Resistance](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#73-downgrade-resistance)
+
+[7.4 STP](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#74-stp--sovereign-transport-protocol)
+
+[7.5 Transport Fail-Closed](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#75-transport-fail-closed)
+
+[7.6 Encrypted-Before-Transport (EBT)](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#76-encrypted-before-transport-ebt-requirement-normative)
+
+---
+
+## **8. LEDGER**
+
+[8. Ledger](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#8-ledger-normative)
+
+[8.1 Ledger Entry Structure](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#81-ledger-entry-structure)
+
+[8.2 Merkle Construction](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#82-merkle-construction)
+
+[8.3 Monotonic Ordering](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#83-monotonic-ordering)
+
+[8.4 Reconciliation](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#84-reconciliation)
+
+[8.5 Required Events](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#85-required-ledger-events)
+
+[8.6 Fail-Closed Ledger Behaviour](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#86-fail-closed-ledger-behaviour)
+
+---
+
+# **ANNEXES**
+
+[ANNEX A — MVP Compliance Profile](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-a--mvp-compliance-profile-normative)
+
+[ANNEX B — Full & Extended Compliance Profiles](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-b--full--extended-compliance-profiles-normative)
+
+[ANNEX C — Workflow Examples](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-c--workflow-examples-informative)
+
+[ANNEX D — Recovery Capsules](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-d--recovery-capsules-normative)
+
+[ANNEX E — CDDL Definitions](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-e--cddl-definitions-informative)
+
+[ANNEX F — Reference Test Vectors](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-f--reference-test-vectors-informative)
+
+[ANNEX G — Secure Payments Module](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-g--secure-payments-module-optional-normative)
+
+[ANNEX H — Cryptographic Erasure Proof](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-h--cryptographic-erasure-proof-optional-normative)
+
+[ANNEX I — Browser Privacy & Consent Controls](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-i--browser-privacy--consent-controls-optional-normative)
+
+[ANNEX J — Ephemeral Carts & Privacy-Preserving Ecommerce](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-j--ephemeral-carts--privacy-preserving-ecommerce-optional-normative)
+
+[ANNEX K — Verified Identity & KYC Credentials](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-k--verified-identity--kyc-credentials-optional-normative)
+
+[ANNEX L — Delegated Identity](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-l--delegated-identity-optional-normative)
+
+[ANNEX M — Delegated Payments](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-m--delegated-payments-optional-normative)
+
+[ANNEX N — Quantum-Safe Wallet-Backed Login](https://github.com/rosieRRRRR/pqsf/blob/main/pqsf.md#annex-n--quantum-safe-wallet-backed-user-login-optional-normative)
+
 ---
 
 # **ABSTRACT**
