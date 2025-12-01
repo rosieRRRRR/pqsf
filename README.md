@@ -4277,6 +4277,312 @@ Wallet-backed login under this annex provides:
 
 ---
 
+# **ANNEX O — SOFTWARE ENFORCEMENT PROFILE (NORMATIVE)**
+
+## **O.1 Scope**
+
+This annex defines the requirements for any **software implementation** acting as a PQSF enforcement point. It specifies how software MUST implement, evaluate, and fail-closed on the PQSF Predicate Model.
+
+Software in scope includes:
+
+* wallets and custody applications
+* local agents and daemons
+* operating-system services, microkernels
+* AI runtimes and orchestration layers
+* cloud services performing PQSF-governed operations
+
+Where this annex conflicts with informative content, **this annex prevails**.
+
+---
+
+## **O.2 Predicate Model Overview (Informative)**
+
+PQSF defines six core predicates:
+
+* **`valid_tick`** — Temporal Authority
+* **`valid_consent`** — Intent Authority
+* **`valid_policy`** — Policy Authority
+* **`valid_runtime`** — Integrity Authority (PQVL)
+* **`valid_quorum`** — Multi-Party Authority
+* **`valid_structure`** — Structural/Schema Authority
+
+These compose:
+
+```
+valid_for_execution =
+      valid_tick
+  AND valid_consent
+  AND valid_policy
+  AND valid_runtime
+  AND valid_quorum
+  AND valid_structure
+```
+
+---
+
+## **O.3 Conformant Software Roles**
+
+A conformant software implementation MUST implement at least:
+
+* **Local Enforcement Agent**, or
+* **Remote Enforcement Service**, or
+* **Orchestration Layer**.
+
+Multiple roles MAY coexist in one implementation.
+
+---
+
+## **O.4 Predicate Evaluation Requirements**
+
+Software MUST:
+
+1. Evaluate all PQSF predicates per-operation.
+2. Treat the following as `predicate = false`:
+
+   * false outcome
+   * missing/ambiguous input
+   * stale tick
+   * signature errors
+   * PQVL `WARNING` or `CRITICAL` drift
+3. Evaluate predicates **atomically** for each operation.
+4. Reject alternative or implicit authorisation paths.
+5. NOT reuse cached predicate results across unrelated operations.
+
+---
+
+## **O.5 Time & Freshness (`valid_tick`)**
+
+Software MUST:
+
+* verify EpochTick signature (ML-DSA-65),
+* enforce monotonicity per authority context,
+* enforce freshness ≤900 seconds (unless stricter policy applies),
+* treat verification failure as `valid_tick = false`,
+* NEVER fall back to system time.
+
+Multi-context deployments MUST maintain independent monotonicity counters.
+
+---
+
+## **O.6 Consent & UI Binding (`valid_consent`)**
+
+Software MUST:
+
+* construct canonical ConsentProof objects,
+* bind consent to the exact operation, tick, exporter_hash, and any runtime state,
+* reject malformed, expired, or mismatched ConsentProof,
+* treat consent as single-use unless an explicit multi-use policy is defined.
+
+---
+
+## **O.7 Policy (`valid_policy`)**
+
+Software MUST:
+
+* evaluate all thresholds, allowlists, denylists, time windows, constraints,
+* reject ambiguous policy outcomes,
+* freeze policy during evaluation; modifications require new consent.
+
+---
+
+## **O.8 Runtime Integrity (`valid_runtime`)**
+
+When PQVL is present, software MUST:
+
+* consume AttestationEnvelope,
+* treat `drift_state = WARNING/CRITICAL` as `valid_runtime = false` for high-risk operations,
+* require fresh attestation when policy mandates it.
+
+Without PQVL, software MUST operate in a documented “runtime-blind” profile or refuse high-risk operations.
+
+---
+
+## **O.9 Quorum (`valid_quorum`)**
+
+Software MUST:
+
+* represent quorum explicitly,
+* verify all approvals,
+* reject revoked/stale/missing approvals,
+* enforce that no single compromised component can satisfy quorum unless explicitly permitted.
+
+---
+
+## **O.10 Structure & Ledger Binding (`valid_structure`)**
+
+Software MUST:
+
+* validate operation/PSBT/message structure,
+* validate resource/ledger/domain correctness,
+* reject incorrect/malformed structures.
+
+---
+
+## **O.11 Fail-Closed Requirements**
+
+Software MUST:
+
+* treat **any error** in predicate evaluation as a hard denial,
+* avoid silent downgrade,
+* log predicate-level failure codes for audit.
+
+---
+
+## **O.12 Software Interaction with Hardware**
+
+Where PQSF-conformant hardware is present:
+
+* mandatory hardware predicates MUST be delegated,
+* hardware refusal MUST be treated as `valid_for_execution = false`,
+* bypassing hardware is forbidden except in explicit degraded-mode configurations.
+
+---
+
+# **ANNEX P — HARDWARE ENFORCEMENT PROFILE (NORMATIVE)**
+
+## **P.1 Scope**
+
+This annex defines requirements for any **hardware component** acting as a PQSF enforcement point or root of authority.
+
+Hardware includes secure enclaves, TPM-like modules, HSMs, microkernels/separation kernels, HAP devices, or embedded controllers executing PQSF operations.
+
+---
+
+## **P.2 General Requirements**
+
+Hardware MUST:
+
+* provide a protected execution environment,
+* expose a verifiable PQSF interface,
+* support ML-DSA-65 key generation, storage, signing,
+* fail-closed on tamper or internal error,
+* never export private key material.
+
+---
+
+## **P.3 Mandatory Hardware-Enforced Predicates**
+
+Hardware acting as an enforcement point MUST enforce:
+
+* **`valid_tick`** — verify ticks, monotonicity, freshness,
+* **`valid_policy`** — where policy is representable in hardware (limits, schedules),
+* **`valid_quorum`** — threshold keys / multi-device approvals,
+* **Key-use gating** — signing MUST only proceed when `valid_for_execution = true`.
+
+Hardware MAY delegate:
+
+* consent,
+* runtime integrity,
+* portions of structure-validation,
+
+**but only over authenticated, integrity-protected channels**.
+
+---
+
+## **P.4 Tick Handling**
+
+Hardware MUST:
+
+* verify EpochTick via ML-DSA-65,
+* maintain a non-resettable monotonic counter per context,
+* reject stale, malformed, replayed ticks,
+* treat tick verification failure as hard denial.
+
+Hardware MUST NOT expose trust anchors to software.
+
+---
+
+## **P.5 Key Management & Signing**
+
+Hardware MUST:
+
+* generate and store ML-DSA-65 keys internally,
+* gate signing on full predicate satisfaction,
+* require predicate results or a verified decision token per operation,
+* re-compute or verify predicate outcomes before signing.
+
+Signing MUST NOT occur on authenticated software request alone.
+
+---
+
+## **P.6 Runtime Attestation (`valid_runtime`)**
+
+Where supported, hardware MUST:
+
+* measure runtime state,
+* report `drift_state` via AttestationEnvelope,
+* enforce:
+
+  * NONE → allow,
+  * WARNING → restrict per profile,
+  * CRITICAL → deny high-risk operations.
+
+If attestation is unsupported, hardware MUST declare this and MUST NOT assert drift-free state.
+
+---
+
+## **P.7 Interface Integrity**
+
+Hardware MUST:
+
+* authenticate and integrity-protect communication with software,
+* reject malformed or replayed messages,
+* provide explicit, verifiable status codes,
+* never silently downgrade enforcement.
+
+---
+
+## **P.8 Tamper Detection & Fail-Closed**
+
+Hardware MUST:
+
+* zeroise key material or disable operations on tamper,
+* report tamper to software (mapped to `valid_runtime = false`),
+* refuse PQSF-governed operations while tamper is active.
+
+---
+
+## **P.9 Capability Profiles**
+
+Hardware MAY declare capability profiles:
+
+* **Key-Only Enforcement**,
+* **Full Predicate Enforcement**,
+* **Attestation-First**.
+
+Regardless of profile:
+
+* advertised predicates MUST match actual behaviour,
+* operations requiring unsupported predicates MUST be denied.
+
+---
+
+## **P.10 Interaction with Software**
+
+Hardware MUST enforce predicate rules deterministically and MAY reject operations that violate:
+
+* time,
+* policy,
+* quorum,
+* ledger structure,
+* or runtime state.
+
+Software MUST treat such rejections as authoritative.
+
+---
+
+## **P.11 Deterministic Behaviour**
+
+Hardware MUST produce:
+
+* canonical predicate outcomes,
+* reproducible error codes,
+* deterministic signing results over canonical operation objects.
+
+Non-determinism is forbidden for any security-relevant operation.
+
+---
+
 ## **Acknowledgements (Informative)**
 
 This specification acknowledges the foundational contributions of:
