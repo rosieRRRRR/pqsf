@@ -6,9 +6,8 @@ An Open Standard for Deterministic Post-Quantum Security Primitives for Internet
 **Status:** Implementation Ready. Protocol Review Requested.
 **Author:** rosiea
 **Contact:** [PQRosie@proton.me](mailto:PQRosie@proton.me)
-**Date:** November 2025
+**Date:** December 2025
 **Licence:** Apache License 2.0 — Copyright 2025 rosiea
-
 
 ---
 
@@ -95,168 +94,97 @@ Ensures integrity and strict monotonic history.
 ---
 
 ## **INDEX**
-
-[ABSTRACT](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#abstract)
-
-[PROBLEM STATEMENT](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#problem-statement)
-
-[PURPOSE](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#purpose)
-
-[WHAT THIS SPECIFICATION COVERS](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#what-this-specification-covers)
-
----
-
-## **2. ARCHITECTURE**
-
-[2. ARCHITECTURE OVERVIEW](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#2-architecture-overview-normative)
-
-[2.1 Components](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#21-components)
-
-[2.2 Minimal Compliance](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#22-minimal-compliance)
-
-[2.3 Design Principles](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#23-design-principles)
-
-[2.4 Device Identity](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#24-device-identity-in-pqsf-consumers-informative)
-
-[2.5 Independence from Central Infrastructure](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#25-independence-from-central-infrastructure-informative)
-
----
-
-## **3. CRYPTOGRAPHIC PRIMITIVES**
-
-[3.1 Hash Functions](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#31-hash-functions)
-
-[3.2 Key Derivation](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#32-key-derivation)
-
-[3.3 Universal Secret Derivation](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#33-universal-secret-derivation-normative)
-
-[3.4 Post-Quantum Signatures](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#34-post-quantum-signatures)
-
-[3.5 Canonical Encoding](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#35-canonical-encoding)
-
----
-
-## **4. TEMPORAL AUTHORITY — EPOCH TICK**
-
-[4. Temporal Authority — EpochTick](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#4-temporal-authority--epoch-tick-normative)
-
-[4.1 Tick Structure](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#41-tick-structure)
-
-[4.2 Profile Structure & Lineage](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#42-profile-structure--parentchild-clock-selection)
-
-[4.3 Freshness Rule](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#43-freshness-rule-tick-age-limit)
-
-[4.4 Monotonicity](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#44-monotonicity)
-
-[4.5 profile_ref Validation](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#45-profile_ref-validation)
-
-[4.6 TickCache](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#46-tickcache)
-
----
-
-## **5. INTENT AUTHORITY — CONSENTPROOF**
-
-[5. Intent Authority — ConsentProof](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#5-intent-authority--consentproof-normative)
-
-[5.1 Structure](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#51-structure)
-
-[5.2 Canonicalisation](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#52-canonicalisation)
-
-[5.3 Tick Binding](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#53-tick-binding)
-
-[5.4 Exporter Binding](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#54-exporter-binding-session-binding)
-
-[5.5 Role Binding](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#55-role-binding)
-
-[5.6 Signature Requirements](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#56-signature-requirements)
-
----
-
-## **6. POLICY AUTHORITY — POLICY ENFORCER**
-
-[6. Policy Authority — Policy Enforcer](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#6-policy-authority--policy-enforcer-normative)
-
-[6.1 Structure](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#61-structure)
-
-[6.2 Canonicalisation](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#62-canonicalisation)
-
-[6.3 Required Predicates](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#63-required-predicates)
-
-[6.4 Tick-Dependent Rules](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#64-tick-dependent-rules)
-
-[6.5 Allowlist / Denylist Enforcement](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#65-allowlist--denylist-enforcement)
-
-[6.6 Threshold & Constraint Rules](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#66-threshold--constraint-rules)
-
-[6.7 Signature Bundles](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#67-signature-bundles)
-
----
-
-## **7. TRANSPORT SECURITY — TLSE-EMP & STP**
-
-[7. Transport Security](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#7-transport-security--tlse-emp-and-stp-normative)
-
-[7.1 TLSE-EMP](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#71-tlse-emp-deterministic-tls)
-
-[7.2 Exporter Hash Derivation](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#72-exporter-hash-derivation-normative)
-
-[7.3 Downgrade Resistance](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#73-downgrade-resistance)
-
-[7.4 STP](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#74-stp--sovereign-transport-protocol)
-
-[7.5 Transport Fail-Closed](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#75-transport-fail-closed)
-
-[7.6 Encrypted-Before-Transport (EBT)](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#76-encrypted-before-transport-ebt-requirement-normative)
-
----
-
-## **8. LEDGER**
-
-[8. Ledger](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#8-ledger-normative)
-
-[8.1 Ledger Entry Structure](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#81-ledger-entry-structure)
-
-[8.2 Merkle Construction](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#82-merkle-construction)
-
-[8.3 Monotonic Ordering](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#83-monotonic-ordering)
-
-[8.4 Reconciliation](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#84-reconciliation)
-
-[8.5 Required Events](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#85-required-ledger-events)
-
-[8.6 Fail-Closed Ledger Behaviour](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#86-fail-closed-ledger-behaviour)
-
----
-
-# **ANNEXES**
-
-[ANNEX A — MVP Compliance Profile](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-a--mvp-compliance-profile-normative)
-
-[ANNEX B — Full & Extended Compliance Profiles](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-b--full--extended-compliance-profiles-normative)
-
-[ANNEX C — Workflow Examples](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-c--workflow-examples-informative)
-
-[ANNEX D — Recovery Capsules](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-d--recovery-capsules-normative)
-
-[ANNEX E — CDDL Definitions](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-e--cddl-definitions-informative)
-
-[ANNEX F — Reference Test Vectors](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-f--reference-test-vectors-informative)
-
-[ANNEX G — Secure Payments Module](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-g--secure-payments-module-optional-normative)
-
-[ANNEX H — Cryptographic Erasure Proof](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-h--cryptographic-erasure-proof-optional-normative)
-
-[ANNEX I — Browser Privacy & Consent Controls](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-i--browser-privacy--consent-controls-optional-normative)
-
-[ANNEX J — Ephemeral Carts & Privacy-Preserving Ecommerce](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-j--ephemeral-carts--privacy-preserving-ecommerce-optional-normative)
-
-[ANNEX K — Verified Identity & KYC Credentials](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-k--verified-identity--kyc-credentials-optional-normative)
-
-[ANNEX L — Delegated Identity](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-l--delegated-identity-optional-normative)
-
-[ANNEX M — Delegated Payments](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-m--delegated-payments-optional-normative)
-
-[ANNEX N — Quantum-Safe Wallet-Backed Login](https://github.com/rosieRRRRR/pqsf?tab=readme-ov-file#annex-n--quantum-safe-wallet-backed-user-login-optional-normative)
+[ABSTRACT](#abstract)
+[PROBLEM STATEMENT](#problem-statement)
+[PURPOSE](#purpose)
+[WHAT THIS SPECIFICATION COVERS](#what-this-specification-covers)
+[SECURITY UPLIFT](#security-uplift-informative)
+[2. ARCHITECTURE OVERVIEW](#2-architecture-overview-normative)
+[2.1 Components](#21-components)
+[2.2 Minimal Compliance](#22-minimal-compliance)
+[2.3 Design Principles](#23-design-principles)
+[2.4 Device Identity](#24-device-identity-in-pqsf-consumers-informative)
+[2.5 Independence from Central Infrastructure](#25-independence-from-central-infrastructure-informative)
+
+[3. CRYPTOGRAPHIC PRIMITIVES](#3-cryptographic-primitives-normative)
+[3.1 Hash Functions](#31-hash-functions)
+[3.2 Key Derivation](#32-key-derivation)
+[3.3 Universal Secret Derivation](#33-universal-secret-derivation-normative)
+[3.4 Post-Quantum Signatures](#34-post-quantum-signatures)
+[3.5 Canonical Encoding](#35-canonical-encoding)
+
+[4. TEMPORAL AUTHORITY — EPOCH TICK](#4-temporal-authority--epoch-tick-normative)
+[4.1 Tick Structure](#41-tick-structure)
+[4.2 Profile Structure & Lineage](#42-profile-structure--parentchild-clock-selection)
+[4.3 Freshness Rule](#43-freshness-rule-tick-age-limit)
+[4.4 Monotonicity](#44-monotonicity)
+[4.5 profile_ref Validation](#45-profile_ref-validation)
+[4.6 TickCache](#46-tickcache)
+
+[5. INTENT AUTHORITY — CONSENTPROOF](#5-intent-authority--consentproof-normative)
+[5.1 Structure](#51-structure)
+[5.2 Canonicalisation](#52-canonicalisation)
+[5.3 Tick Binding](#53-tick-binding)
+[5.4 Exporter Binding](#54-exporter-binding-session-binding)
+[5.5 Role Binding](#55-role-binding)
+[5.6 Signature Requirements](#56-signature-requirements)
+
+[6. POLICY AUTHORITY — POLICY ENFORCER](#6-policy-authority--policy-enforcer-normative)
+[6.1 Structure](#61-structure)
+[6.2 Canonicalisation](#62-canonicalisation)
+[6.3 Required Predicates](#63-required-predicates)
+[6.4 Tick-Dependent Rules](#64-tick-dependent-rules)
+[6.5 Allowlist / Denylist Enforcement](#65-allowlist--denylist-enforcement)
+[6.6 Threshold & Constraint Rules](#66-threshold--constraint-rules)
+[6.7 Signature Bundles](#67-signature-bundles)
+
+[7. TRANSPORT SECURITY — TLSE-EMP AND STP](#7-transport-security--tlse-emp-and-stp-normative)
+[7.1 TLSE-EMP](#71-tlse-emp-deterministic-tls)
+[7.2 Exporter Hash Derivation](#72-exporter-hash-derivation-normative)
+[7.3 Downgrade Resistance](#73-downgrade-resistance)
+[7.4 STP](#74-stp--sovereign-transport-protocol)
+[7.5 Transport Fail-Closed](#75-transport-fail-closed)
+[7.6 Encrypted-Before-Transport (EBT)](#76-encrypted-before-transport-ebt-requirement-normative)
+
+[8. LEDGER](#8-ledger-normative)
+[8.1 Ledger Entry Structure](#81-ledger-entry-structure)
+[8.2 Merkle Construction](#82-merkle-construction)
+[8.3 Monotonic Ordering](#83-monotonic-ordering)
+[8.4 Reconciliation](#84-reconciliation)
+[8.5 Required Events](#85-required-ledger-events)
+[8.6 Fail-Closed Ledger Behaviour](#86-fail-closed-ledger-behaviour)
+
+[9. OUT-OF-BAND CHANNELS — KEYMAIL](#9-out-of-band-channels--keymail-optional-normative)
+
+[10. COMPLIANCE](#10-compliance-normative)
+[10.1 MVP Compliance](#101-mvp-compliance)
+[10.2 FULL Compliance](#102-full-compliance)
+[10.3 EXTENDED Compliance](#103-extended-compliance)
+[10.4 Compliance Manifest](#104-compliance-manifest)
+[10.5 Custody and Transactional Scope](#105-custody-and-transactional-scope-normative)
+
+[11. ERROR CODES](#11-error-codes-normative)
+[12. SECURITY CONSIDERATIONS](#12-security-considerations-informative)
+[13. IMPLEMENTATION NOTES](#13-implementation-notes-informative)
+[14. BACKWARDS COMPATIBILITY](#14-backwards-compatibility-informative)
+
+## **ANNEXES**
+[ANNEX A — MVP Compliance Profile](#annex-a--mvp-compliance-profile-normative)
+[ANNEX B — Full & Extended Compliance Profiles](#annex-b--full--extended-compliance-profiles-normative)
+[ANNEX C — Workflow Examples](#annex-c--workflow-examples-informative)
+[ANNEX D — Recovery Capsules](#annex-d--recovery-capsules-normative)
+[ANNEX E — CDDL Definitions](#annex-e--cddl-definitions-informative)
+[ANNEX F — Reference Test Vectors](#annex-f--reference-test-vectors-informative)
+[ANNEX G — Secure Payments Module](#annex-g--secure-payments-module-optional-normative)
+[ANNEX H — Cryptographic Erasure Proof](#annex-h--cryptographic-erasure-proof-optional-normative)
+[ANNEX I — Browser Privacy & Consent Controls](#annex-i--browser-privacy--consent-controls-optional-normative)
+[ANNEX J — Ephemeral Carts & Privacy-Preserving Ecommerce](#annex-j--ephemeral-carts--privacy-preserving-ecommerce-optional-normative)
+[ANNEX K — Verified Identity & KYC Credentials](#annex-k--verified-identity--kyc-credentials-optional-normative)
+[ANNEX L — Delegated Identity](#annex-l--delegated-identity-optional-normative)
+[ANNEX M — Delegated Payments](#annex-m--delegated-payments-optional-normative)
+[ANNEX N — Quantum-Safe Wallet-Backed User Login](#annex-n--quantum-safe-wallet-backed-user-login-optional-normative)
+[ANNEX O — Software Enforcement Profile](#annex-o--software-enforcement-profile-normative)
+[ANNEX P — Hardware Enforcement Profile](#annex-p--hardware-enforcement-profile-normative)
 
 ---
 
@@ -457,7 +385,7 @@ External attestation systems such as PQVL may satisfy PQSF’s runtime-validity 
 
 ---
 
-## **1.4 Security Uplift (INFORMATIVE)**
+## **Security Uplift (INFORMATIVE)**
 
 PQSF introduces an authenticated temporal authority (Epoch Clock), ensuring operations occur under a fresh, verifiable time source rather than untrusted system time. This removes replay, rollback, forged expiry, and NTP dependency issues.
 
@@ -1476,6 +1404,161 @@ In all cases:
 
 ---
 
+### **7.7 Epoch Tick Mirror Consensus (NORMATIVE)**
+
+Clients MUST validate EpochTicks against multiple independent mirror sources.
+An EpochTick is considered valid only if **N-of-M identical, signature-valid ticks** are observed, where **N ≥ 2**.
+
+Validation requirements:
+
+* Each candidate EpochTick MUST:
+
+  * be canonically encoded;
+  * reference the correct pinned `profile_ref`;
+  * carry a valid ML-DSA-65 signature;
+  * satisfy freshness and monotonicity rules defined by this specification.
+
+* Ticks obtained from different mirrors MUST be **byte-for-byte identical** after canonical encoding.
+
+If fewer than N identical valid ticks are observed, or if any disagreement exists between otherwise valid ticks, the client MUST:
+
+```
+valid_tick = false
+```
+
+and MUST immediately fail-closed.
+
+Mirror availability, latency, transport errors, or mirror identity are **non-authoritative** and MUST NOT relax this requirement.
+
+---
+
+### **7.8 Hardware Acceleration (OPTIONAL, INFORMATIVE)**
+
+Implementations MAY offload selected operations to hardware-backed mechanisms such as Hardware Security Modules (HSMs), Trusted Execution Environments (TEEs), or equivalent secure elements.
+
+Permitted offload targets MAY include, but are not limited to:
+
+* attestation probe execution;
+* post-quantum signing operations;
+* secure key storage.
+
+Hardware acceleration:
+
+* MUST NOT alter predicate semantics;
+* MUST NOT weaken, bypass, or shortcut verification requirements;
+* MUST preserve canonical encoding, deterministic evaluation, and fail-closed behaviour.
+
+Absence of hardware acceleration MUST NOT reduce conformance, security guarantees, or compliance with any normative requirement of this specification.
+
+---
+
+### **7.9 Operational Semantics and Cross-Spec Enforcement (NORMATIVE)**
+
+All dependent specifications (including, but not limited to, **PQHD**, **PQVL**, and **PQAI**) MUST adhere to the operational semantics defined in this section.
+
+These rules constitute the mandatory framework for deterministic failure containment, authority enforcement, and custody safety across the PQ ecosystem.
+
+---
+
+#### **7.9.1 Fail-Closed Policy (NORMATIVE)**
+
+Any failure in validation of any of the following MUST trigger immediate fail-closed behaviour:
+
+* EpochTick
+* AttestationEnvelope
+* Policy objects
+* Canonical encoding or structure validation
+
+No fallback paths, heuristic recovery, best-effort modes, degraded operation, or silent continuation are permitted.
+
+If validation cannot be completed unambiguously, the operation MUST be denied.
+
+---
+
+#### **7.9.2 Deterministic Lockout and Backoff (NORMATIVE)**
+
+Repeated failures of critical validation routines MUST trigger a deterministic lockout state:
+
+```
+FAIL_CLOSED_LOCKED
+```
+
+* The default failure threshold **K = 3**, unless a stricter value is defined by the calling specification.
+* Only failures of **authoritative validation routines** (e.g., EpochTick validation, AttestationEnvelope validation, canonical verification) count toward K.
+* Transport errors, mirror unavailability, API failures, or network conditions MUST NOT increment failure counters.
+
+While in `FAIL_CLOSED_LOCKED`:
+
+* the system MUST suppress retries for **Authoritative** operations;
+* the system MUST NOT reuse cached artefacts, AttestationLeases, or prior validation results to re-attempt execution.
+
+Exit from `FAIL_CLOSED_LOCKED` MUST occur **only** after successful validation of **both**:
+
+* a fresh EpochTick satisfying the calling specification’s freshness and monotonicity requirements; and
+* a fresh AttestationEnvelope satisfying the calling specification’s runtime integrity requirements.
+
+Automatic retries, delayed retries, or operator-forced overrides are forbidden.
+
+---
+
+#### **7.9.3 Canonical Primitive Usage (NORMATIVE)**
+
+Application and protocol layers MUST consume **only** cryptographically verified primitives.
+
+Specifically:
+
+* EpochTick and AttestationEnvelope objects MUST be fully verified before use.
+* Retrieval failures, mirror reachability, transport-layer errors, discovery failures, or API errors are **non-authoritative**.
+* Non-authoritative errors MUST NOT:
+
+  * influence predicate outcomes;
+  * affect authority decisions;
+  * increment deterministic failure counters.
+
+Authority is derived solely from verified canonical artefacts.
+
+---
+
+#### **7.9.4 Operational Authority Partitioning (NORMATIVE)**
+
+All operations MUST be explicitly classified as either **Authoritative** or **Non-Authoritative**.
+
+**Authoritative operations** include operations that:
+
+* require full, fresh attestation; and
+* cause irreversible external effects or custody state mutation.
+
+Authoritative operations include, but are not limited to:
+
+* signing;
+* recovery activation;
+* policy creation, modification, or rotation;
+* quorum creation, mutation, or satisfaction;
+* ledger mutation or reconciliation;
+* custody state transitions.
+
+**Non-Authoritative operations** include operations that:
+
+* cause no irreversible external effects; and
+* do not mutate custody or authority state.
+
+Non-Authoritative operations include, but are not limited to:
+
+* read-only queries;
+* lookups and inspection;
+* dry-run validation;
+* UI rendering and status display.
+
+Rules:
+
+* Authoritative operations MUST NOT be executed under an AttestationLease.
+* Non-Authoritative operations MAY consume an AttestationLease when permitted by the calling specification.
+* Misclassification of an Authoritative operation as Non-Authoritative constitutes a conformance violation.
+
+These partitioning rules are mandatory and MUST be enforced consistently across all dependent specifications.
+
+---
+
 # **8. LEDGER (NORMATIVE)**
 
 PQSF defines a deterministic append-only ledger for recording critical security events.
@@ -1885,6 +1968,166 @@ function pqsf_build_compliance_manifest(impl_name, version, level, tick):
     manifest.signature_pq = ml_dsa_65_sign(manifest_sk, bytes)
     return manifest
 ```
+
+---
+
+## 10.5 Custody and Transactional Scope (NORMATIVE)
+
+This section defines **custody qualification tiers** for systems claiming integration with **PQHD** under PQSF. These tiers are **authoritative** and override any informal or marketing descriptions of custody strength.
+
+### **10.5.1 PQHD Custody (Baseline)**
+
+**PQHD Custody (Baseline)** is the **minimum conformance level** that qualifies a system as providing **PQHD Custody**.
+
+A system claiming **PQHD Custody (Baseline)** MUST satisfy **all** of the following requirements:
+
+1. **Multi-Device Quorum**
+
+   * A quorum of **≥2 independent signer runtimes** MUST be required for authorisation.
+   * No single device, runtime, or signer instance MAY unilaterally authorise a spend.
+
+2. **Mandatory Runtime Integrity**
+
+   * **PQVL runtime attestation** MUST be enforced prior to every signing operation.
+   * Any PQVL drift state other than `NONE` MUST cause fail-closed behaviour.
+
+3. **Canonical Transaction Validation**
+
+   * All PSBTs MUST undergo **canonical structure validation** prior to signing.
+   * Non-canonical or ambiguous transaction structures MUST be rejected.
+
+4. **Explicit Intent Enforcement**
+
+   * Every spend MUST be authorised via a valid **ConsentProof** bound to:
+
+     * the specific action,
+     * a fresh EpochTick,
+     * the active exporter_hash,
+     * deterministic canonical encoding.
+
+5. **Deterministic Policy Enforcement**
+
+   * All spends MUST be evaluated through the **Policy Enforcer** with deterministic predicates.
+   * Thresholds, limits, and constraints MUST be enforced locally and fail-closed.
+
+6. **Ledger Continuity**
+
+   * All custody-relevant events MUST be recorded in a deterministic, append-only ledger.
+   * Ledger continuity MUST be preserved across devices and sessions.
+
+A system that satisfies **PQHD Custody (Baseline)** provides the security guarantee that **no single compromised device, runtime, or signing environment can authorise a spend**.
+
+---
+
+### **10.5.2 PQHD Custody (Enterprise)**
+
+**PQHD Custody (Enterprise)** builds on **PQHD Custody (Baseline)** and is intended for **institutional, regulated, or sovereign threat models**.
+
+A system claiming **PQHD Custody (Enterprise)** MUST satisfy **all Baseline requirements**, and additionally MUST implement:
+
+1. **Quorum Diversity Constraints**
+
+   * Quorum participants MUST be **heterogeneous** across devices, runtimes, or trust domains.
+   * Policy MUST prevent quorum satisfaction by a homogeneous failure class.
+
+2. **Guardian Participation and Deterministic Delays**
+
+   * Guardian-based approval flows MUST be supported where policy requires.
+   * Deterministic delay windows MUST be enforceable prior to high-risk actions.
+
+3. **Formal Recovery Capsules**
+
+   * Recovery MUST be mediated exclusively through **Recovery Capsules** as defined in Annex D.
+   * Recovery activation MUST be:
+
+     * tick-bound,
+     * quorum-authorised,
+     * ledger-recorded,
+     * delay-constrained.
+
+4. **Emergency Clock Governance**
+
+   * Enterprise deployments MUST define governance procedures for:
+
+     * Epoch Clock profile rotation,
+     * emergency clock pinning,
+     * incident response under temporal authority compromise.
+
+5. **Cross-Device Ledger Reconciliation**
+
+   * Deterministic reconciliation MUST be supported across devices and signers.
+   * Divergent histories MUST be detected and fail-closed until resolved.
+
+6. **Full Auditability**
+
+   * All custody-relevant events MUST be auditable end-to-end.
+   * Ledger entries MUST support institutional compliance and post-incident review.
+
+**PQHD Custody (Enterprise)** is REQUIRED for environments that demand formal governance, auditability, and resilience against coordinated or insider threat models.
+
+---
+
+### **10.5.3 Transactional Profile (Non-Custodial Profile)**
+
+The **Transactional Profile** is an explicitly **non-custodial** integration profile.
+
+A system operating under the **Transactional Profile**:
+
+* MAY implement:
+
+  * canonical encoding,
+  * ConsentProof,
+  * EpochTick usage,
+  * deterministic policy objects,
+  * PSBT canonicalisation,
+  * basic ledger continuity.
+
+* MUST be assumed to:
+
+  * operate on a **single-device** basis, and
+  * fail under **single-device runtime compromise**.
+
+The Transactional Profile:
+
+* MUST NOT claim or imply **PQHD Custody**,
+* MUST NOT be marketed as **Baseline** or **Enterprise custody**,
+* MUST NOT assert guarantees that rely on quorum, runtime integrity, or custody-grade isolation.
+
+This profile exists solely to allow **transactional correctness and determinism**, not custody security.
+
+---
+
+### **10.5.4 Normative Marketing and Claim Restrictions**
+
+Any system that does **not** meet the full requirements of **PQHD Custody (Baseline)**:
+
+* MUST NOT use the terms:
+
+  * “PQHD Custody”,
+  * “quantum-secure custody”,
+  * “custodial-grade PQHD”.
+
+Misrepresentation of custody tier constitutes **non-conformance** with this specification.
+
+---
+
+### **10.5.5 Relationship to PQSF Predicates**
+
+The custody tier directly constrains interpretation of PQSF predicates:
+
+* **PQHD Custody (Baseline / Enterprise)**:
+
+  * `valid_quorum` MUST be enforced.
+  * `valid_runtime` MUST be satisfied via PQVL.
+  * Ledger continuity MUST be enforced.
+
+* **Transactional Profile**:
+
+  * `valid_quorum` MAY be trivially satisfied.
+  * `valid_runtime` MAY be absent.
+  * Custody guarantees MUST NOT be claimed.
+
+PQSF predicates remain unchanged; **custody tier determines which predicates are mandatory and which guarantees may be asserted**.
 
 ---
 
