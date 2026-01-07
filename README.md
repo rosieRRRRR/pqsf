@@ -1,4846 +1,3000 @@
-# **PQSF — Post-Quantum Security Framework**
+# PQSF – Post-Quantum Security Framework
 
-An Open Standard for Deterministic Post-Quantum Security Primitives for Internet Protocols, AI Systems and Digital Asset Custody
-
-**Specification Version:** v1.0.0
-**Status:** Implementation Ready. Protocol Review Requested.
-**Author:** rosiea
-**Contact:** [PQRosie@proton.me](mailto:PQRosie@proton.me)
-**Date:** December 2025
-**Licence:** Apache License 2.0 — Copyright 2025 rosiea
+* **Specification Version:** 2.0.2
+* **Status:** Implementation Ready
+* **Date:** 2026
+* **Author:** rosiea
+* **Contact:** [PQRosie@proton.me](mailto:PQRosie@proton.me)
+* **Licence:** Apache License 2.0 — Copyright 2025 rosiea
 
 ---
 
-# **SUMMARY**
+## Summary
 
-The Post-Quantum Security Framework (PQSF) defines deterministic, post-quantum-safe primitives for transport, authorisation, and decision-making across heterogeneous environments. It replaces trust in local clocks, operating-system state, coordinators, cloud services, and identity intermediaries with cryptographically verifiable constructs that behave identically across all compliant implementations.
+PQSF provides the foundational protocol primitives for the PQ stack: canonical encoding, cryptographic suite indirection, deterministic object grammars, session binding, and encrypted-before-transport wrappers. It eliminates ambiguity at the protocol layer through deterministic CBOR and JCS Canonical JSON encoding, enabling byte-stable hashing and signing. CryptoSuiteProfile indirection allows algorithm transitions without specification rewrites. Exporter binding primitives enable session-scoped security without trusting networks. PQSF is deliberately minimal—it defines grammar, encoding, and validation rules only. All enforcement and authority semantics live in consuming specifications.
 
-PQSF’s goal is to give systems **user sovereignty**, **strong privacy guarantees**, and **cross-implementation consistency** without depending on DNS, NTP, PKI, or trusted hosts. It does this by explicitly defining time, consent, policy, runtime-state, and structure validity as first-class protocol elements.
-
-## **Core Problem and Operating Model**
-
-Traditional Internet security depends on assumptions that are often false: system clocks can be modified, OS state can be tampered with, UI consent can be forged, and identity services can leak or be unavailable. Replay, rollback, downgrade, and drift attacks remain possible because critical information is not verifiable in a deterministic way.
-
-PQSF removes these assumptions. Every sensitive operation must pass a unified predicate set:
-
-```
-valid_tick
-AND valid_consent
-AND valid_policy
-AND valid_runtime     (optional: PQVL)
-AND valid_quorum      (child-spec)
-AND valid_ledger
-AND valid_structure
-```
-
-If any element fails, the system fails-closed.
-
-Key design principles include deterministic behaviour, canonical encoding, post-quantum safety, explicit time binding, exporter-bound sessions, OS-agnostic logic, and stateless transport.
-
-## **The Three Core Authorities**
-
-### **1. EpochTick — Temporal Authority**
-
-A signed, verifiable timestamp that replaces untrusted system time.
-Ticks must be **fresh** (≤ 900 s), **monotonic**, and signed using **ML-DSA-65**.
-All consent, policy, ledger, and runtime decisions are bound to the active tick and its pinned Epoch Clock profile.
-
-### **2. ConsentProof — Intent Authority**
-
-Explicit, cryptographically authenticated user intent.
-Bound to:
-
-* a specific action
-* a session exporter_hash
-* a fresh EpochTick
-* an ML-DSA-65 signature
-* a deterministic, canonical structure
-
-This prevents replay across sessions or contexts.
-
-### **3. Policy Enforcer — Policy Authority**
-
-Deterministic evaluation of allowlists, denylists, thresholds, limits, time windows, and constraints.
-Policies must be canonicalised and hashed with **SHAKE256-256**, ensuring they cannot be modified without detection.
-
-## **Transport, Encoding, and Cryptography**
-
-### **Encrypted-Before-Transport (EBT)**
-
-A universal rule: all sensitive artefacts must be encrypted *before* entering any transport, including TLSE-EMP, STP, or cloud storage.
-Hosts and intermediaries cannot access plaintext.
-
-### **Transport Profiles**
-
-* **TLSE-EMP** — deterministic TLS 1.3 profile enforcing exporter binding, replay resistance, and downgrade detection.
-* **STP (Sovereign Transport Protocol)** — DNS-free, offline-capable transport with deterministic framing for sovereign and air-gapped environments.
-
-### **Canonical Encoding**
-
-All PQSF objects use deterministic **CBOR** or **JCS JSON**, eliminating ambiguity and ensuring consistent hashing, signatures, and structure-validation across implementations.
-
-### **Post-Quantum Cryptography**
-
-* Signatures: **ML-DSA-65**
-* Hashing: **SHAKE256-256**
-* Derivation: **cSHAKE256** with domain separation
-* Optional encryption: **ML-KEM-1024**, AES-256-GCM, or XChaCha20-Poly1305
-
-### **Deterministic Ledger**
-
-An append-only Merkle ledger with freeze-on-error semantics, recording tick validation, consent events, policy rotations, runtime results, and profile changes.
-Ensures integrity and strict monotonic history.
+**Key Properties:** Canonical encoding discipline | Crypto-agility via profiles | Session binding primitives | EBT artefact protection | Zero enforcement semantics | Protocol-layer foundation
 
 ---
 
-## **INDEX**
-[ABSTRACT](#abstract)
-[PROBLEM STATEMENT](#problem-statement)
-[PURPOSE](#purpose)
-[WHAT THIS SPECIFICATION COVERS](#what-this-specification-covers)
-[SECURITY UPLIFT](#security-uplift-informative)
-[2. ARCHITECTURE OVERVIEW](#2-architecture-overview-normative)
-[2.1 Components](#21-components)
-[2.2 Minimal Compliance](#22-minimal-compliance)
-[2.3 Design Principles](#23-design-principles)
-[2.4 Device Identity](#24-device-identity-in-pqsf-consumers-informative)
-[2.5 Independence from Central Infrastructure](#25-independence-from-central-infrastructure-informative)
+## Index
 
-[3. CRYPTOGRAPHIC PRIMITIVES](#3-cryptographic-primitives-normative)
-[3.1 Hash Functions](#31-hash-functions)
-[3.2 Key Derivation](#32-key-derivation)
-[3.3 Universal Secret Derivation](#33-universal-secret-derivation-normative)
-[3.4 Post-Quantum Signatures](#34-post-quantum-signatures)
-[3.5 Canonical Encoding](#35-canonical-encoding)
-
-[4. TEMPORAL AUTHORITY — EPOCH TICK](#4-temporal-authority--epoch-tick-normative)
-[4.1 Tick Structure](#41-tick-structure)
-[4.2 Profile Structure & Lineage](#42-profile-structure--parentchild-clock-selection)
-[4.3 Freshness Rule](#43-freshness-rule-tick-age-limit)
-[4.4 Monotonicity](#44-monotonicity)
-[4.5 profile_ref Validation](#45-profile_ref-validation)
-[4.6 TickCache](#46-tickcache)
-
-[5. INTENT AUTHORITY — CONSENTPROOF](#5-intent-authority--consentproof-normative)
-[5.1 Structure](#51-structure)
-[5.2 Canonicalisation](#52-canonicalisation)
-[5.3 Tick Binding](#53-tick-binding)
-[5.4 Exporter Binding](#54-exporter-binding-session-binding)
-[5.5 Role Binding](#55-role-binding)
-[5.6 Signature Requirements](#56-signature-requirements)
-
-[6. POLICY AUTHORITY — POLICY ENFORCER](#6-policy-authority--policy-enforcer-normative)
-[6.1 Structure](#61-structure)
-[6.2 Canonicalisation](#62-canonicalisation)
-[6.3 Required Predicates](#63-required-predicates)
-[6.4 Tick-Dependent Rules](#64-tick-dependent-rules)
-[6.5 Allowlist / Denylist Enforcement](#65-allowlist--denylist-enforcement)
-[6.6 Threshold & Constraint Rules](#66-threshold--constraint-rules)
-[6.7 Signature Bundles](#67-signature-bundles)
-
-[7. TRANSPORT SECURITY — TLSE-EMP AND STP](#7-transport-security--tlse-emp-and-stp-normative)
-[7.1 TLSE-EMP](#71-tlse-emp-deterministic-tls)
-[7.2 Exporter Hash Derivation](#72-exporter-hash-derivation-normative)
-[7.3 Downgrade Resistance](#73-downgrade-resistance)
-[7.4 STP](#74-stp--sovereign-transport-protocol)
-[7.5 Transport Fail-Closed](#75-transport-fail-closed)
-[7.6 Encrypted-Before-Transport (EBT)](#76-encrypted-before-transport-ebt-requirement-normative)
-
-[8. LEDGER](#8-ledger-normative)
-[8.1 Ledger Entry Structure](#81-ledger-entry-structure)
-[8.2 Merkle Construction](#82-merkle-construction)
-[8.3 Monotonic Ordering](#83-monotonic-ordering)
-[8.4 Reconciliation](#84-reconciliation)
-[8.5 Required Events](#85-required-ledger-events)
-[8.6 Fail-Closed Ledger Behaviour](#86-fail-closed-ledger-behaviour)
-
-[9. OUT-OF-BAND CHANNELS — KEYMAIL](#9-out-of-band-channels--keymail-optional-normative)
-
-[10. COMPLIANCE](#10-compliance-normative)
-[10.1 MVP Compliance](#101-mvp-compliance)
-[10.2 FULL Compliance](#102-full-compliance)
-[10.3 EXTENDED Compliance](#103-extended-compliance)
-[10.4 Compliance Manifest](#104-compliance-manifest)
-[10.5 Custody and Transactional Scope](#105-custody-and-transactional-scope-normative)
-
-[11. ERROR CODES](#11-error-codes-normative)
-[12. SECURITY CONSIDERATIONS](#12-security-considerations-informative)
-[13. IMPLEMENTATION NOTES](#13-implementation-notes-informative)
-[14. BACKWARDS COMPATIBILITY](#14-backwards-compatibility-informative)
-
-## **ANNEXES**
-[ANNEX A — MVP Compliance Profile](#annex-a--mvp-compliance-profile-normative)
-[ANNEX B — Full & Extended Compliance Profiles](#annex-b--full--extended-compliance-profiles-normative)
-[ANNEX C — Workflow Examples](#annex-c--workflow-examples-informative)
-[ANNEX D — Recovery Capsules](#annex-d--recovery-capsules-normative)
-[ANNEX E — CDDL Definitions](#annex-e--cddl-definitions-informative)
-[ANNEX F — Reference Test Vectors](#annex-f--reference-test-vectors-informative)
-[ANNEX G — Secure Payments Module](#annex-g--secure-payments-module-optional-normative)
-[ANNEX H — Cryptographic Erasure Proof](#annex-h--cryptographic-erasure-proof-optional-normative)
-[ANNEX I — Browser Privacy & Consent Controls](#annex-i--browser-privacy--consent-controls-optional-normative)
-[ANNEX J — Ephemeral Carts & Privacy-Preserving Ecommerce](#annex-j--ephemeral-carts--privacy-preserving-ecommerce-optional-normative)
-[ANNEX K — Verified Identity & KYC Credentials](#annex-k--verified-identity--kyc-credentials-optional-normative)
-[ANNEX L — Delegated Identity](#annex-l--delegated-identity-optional-normative)
-[ANNEX M — Delegated Payments](#annex-m--delegated-payments-optional-normative)
-[ANNEX N — Quantum-Safe Wallet-Backed User Login](#annex-n--quantum-safe-wallet-backed-user-login-optional-normative)
-[ANNEX O — Software Enforcement Profile](#annex-o--software-enforcement-profile-normative)
-[ANNEX P — Hardware Enforcement Profile](#annex-p--hardware-enforcement-profile-normative)
+1. [Summary](#summary)
+2. [Non-Normative Overview](#non-normative-overview--for-explanation-and-orientation-only)
+3. [Scope and Protocol Boundary](#scope-and-protocol-boundary)
+4. [Non-Goals and Authority Prohibition](#non-goals-and-authority-prohibition)
+5. [Architecture Overview](#architecture-overview)
+6. [Explicit Dependencies](#expliciT-dependencies)
+7. [Canonical Encoding](#canonical-encoding)
+   1. [PQSF-Native Canonical Encoding (Deterministic CBOR Only)](#pqsf-native-canonical-encoding-deterministic-cbor-only)
+   2. [Strict CBOR Profile](#strict-cbor-profile)
+   3. [Fuzzing Resistance via Canonical Encoding](#fuzzing-resistance-via-canonical-encoding)
+   4. [Epoch Clock Canonical Encoding Exception (JCS Canonical JSON Only)](#epoch-clock-canonical-encoding-exception-jcs-canonical-json-only)
+8. [CryptoSuiteProfile Indirection](#cryptosuiteprofile-indirection)
+9. [Hashing Interface](#hashing-interface)
+10. [Signature Interface](#signature-interface)
+11. [Domain Separation](#domain-separation)
+12. [Deterministic Derivation](#deterministic-derivation)
+13. [Universal Secret Derivation](#universal-secret-derivation)
+14. [Epoch Clock Integration Objects](#epoch-clock-integration-objects)
+15. [Exporter Binding Primitive](#exporter-binding-primitive)
+16. [ConsentProof Grammar](#consentproof-grammar)
+17. [Policy Objects and Governance Metadata](#policy-objects-and-governance-metadata)
+18. [LedgerEntry Grammar](#ledgerentry-grammar)
+19. [Merkle Ledger Serialization](#merkle-ledger-serialization)
+20. [RecoveryCapsule Grammar](#recoverycapsule-grammar)
+21. [Encrypted-Before-Transport Wrapper](#encrypted-before-transport-wrapper)
+22. [Supply Chain Artefact Types](#supply-chain-artefact-types)
+23. [Supply Chain Ledger Anchoring](#supply-chain-ledger-anchoring)
+24. [Reproducible Build Support](#reproducible-build-support)
+25. [No Trust in Network Location](#no-trust-in-network-location)
+26. [Sovereign Transport Protocol Grammar](#sovereign-transport-protocol-grammar-stp)
+27. [Failure Semantics](#failure-semantics)
+28. [Conformance](#conformance)
+29. [Security Considerations](#security-considerations)
+30. [Annexes](#annexes)
+31. [Changelog](#changelog)
 
 ---
 
-# **ABSTRACT**
+## Non-Normative Overview — For Explanation and Orientation Only
 
-The Post-Quantum Security Framework (PQSF) defines deterministic security primitives that augment existing transport protocols with verifiable time, explicit cryptographic intent, canonical policy evaluation, and privacy-preserving execution semantics. PQSF introduces three core constructs—EpochTick, ConsentProof, and Policy Enforcer that binds authorisation to a signed temporal reference, an authenticated session, and deterministic policy logic. These constructs operate alongside a profile of TLS 1.3 (TLSE-EMP) and a sovereign, DNS-independent transport (STP), providing replay resistance, downgrade protection, and cross-implementation consistency without modifying existing TLS wire formats.
+**This section is NOT part of the conformance surface.  
+It is provided for explanatory and onboarding purposes only.**
 
-PQSF is designed for environments that require user sovereignty and strong privacy guarantees. It enables local verification of all security conditions without reliance on system clocks, centralised authorities, or third-party identity services. Canonical encoding and fail-closed semantics ensure that sensitive operations cannot occur under stale time, ambiguous structures, or unverified runtime conditions. PQSF also defines an optional runtime-validity predicate that may be satisfied by external attestation layers such as PQVL.
+### Plain Summary
 
-Optional annexes provide identity, delegated authority, delegated payments, and privacy modules that extend, but do not modify the core framework.
+PQSF defines the foundational protocol primitives used across the PQ
+stack. It specifies canonical encoding rules, cryptographic suite
+indirection, deterministic object grammars, and session binding
+primitives. PQSF provides infrastructure only and grants no authority.
 
----
+### What PQSF Is / Is Not
 
-# **PROBLEM STATEMENT**
+| PQSF IS | PQSF IS NOT |
+|---------|-------------|
+| A protocol grammar and ruleset | An enforcement engine |
+| A canonical encoding specification | An authority source |
+| A crypto agility framework | A concrete algorithm selector |
+| A session binding primitive provider | A transport protocol |
 
-Existing Internet security models assume trust in local clocks, operating-system state, centralised time sources, UI-level consent mechanisms, and broad identity disclosures. These assumptions undermine both privacy and security: replay and rollback attacks become feasible, stale signatures remain valid, and authorisation decisions often depend on unverifiable local state. Transport protocols provide confidentiality and endpoint authentication, but they do not bind operations to explicit user intent, signed time, deterministic policies, or privacy-preserving identity semantics.
+### Canonical Flow (Single Line)
 
-Current designs also assume centralised intermediaries or ambient system state for runtime trust. This limits user sovereignty: users cannot independently verify authorisation conditions, and cannot operate securely in constrained, offline, or partitioned environments. Privacy is further weakened by inconsistent encoding, metadata leakage, and ad-hoc handling of identity attributes or consent records.
+Artefact → Canonical Encoding → Profile-Governed Cryptography → Verification
 
-PQSF defines deterministic locally verifiable primitives that bind time, intent, policy, and (optionally) runtime-validity into a single transport-compatible model. PQSF allows systems to operate without trusting local clocks, coordinators, or external identity providers, while supporting optional integration with external attestation layers such as PQVL when available.
+### Why This Exists
 
----
-
-# **PURPOSE**
-
-PQSF defines a deterministic, post-quantum-secure foundation for authorisation and transport-bound decision making across heterogeneous systems. It enables privacy-preserving operation and user sovereignty through local verification of time, intent, policy, and structural integrity without dependency on central authorities or OS-level trust.
-
-## PQSF Provides
-
-* verifiable, privacy-preserving temporal authority (EpochTick)
-* explicit, cryptographically authenticated intent (ConsentProof)
-* deterministic and canonical policy enforcement (Policy Enforcer)
-* exporter-bound session identity over TLSE-EMP and STP
-* canonical deterministic encoding for all security-relevant artefacts
-* deterministic cSHAKE256-based key-derivation and lifecycle rules
-* an append-only, deterministic Merkle ledger for integrity-critical events
-* a runtime-validity predicate that may be satisfied by PQVL
-* mandatory Encrypted-Before-Transport semantics for all sensitive content
-* sovereign, DNS-free STP transport with offline and Stealth Mode operation
-* a Probe API for runtime, privacy, AI-alignment, and policy-related checks
-* compliance tiers (MVP, FULL, EXTENDED) for interoperable deployments
-* optional privacy-preserving identity and selective-disclosure credentials
-* optional delegated identity and delegated-payment authority models
-* optional KeyMail out-of-band confirmation for high-risk flows
-* deterministic recovery capsule structures for controlled restoration
-* optional wallet-backed login using tick-bound, consent-bound assertions
-* privacy-preserving ecommerce flows (EphemeralSession and EphemeralCart)
-* cloud-sovereignty rules ensuring all PQSF artefacts are encrypted locally before storage or transmission
-
-These primitives support privacy-first deployments where data minimisation, local verification, and transport-bound semantics are required.
-
-### Pseudocode (Informative) — High-Level PQSF Predicate Pipeline
-
-```pseudo
-// High-level PQSF decision: may this sensitive operation proceed?
-function pqsf_may_proceed(ctx):
-    // 1. Validate tick (EpochTick)
-    (ctx.valid_tick, ctx.tick_error) =
-        pqsf_validate_tick(ctx.tick, ctx.pinned_profile_ref, ctx.last_tick)
-
-    if not ctx.valid_tick:
-        return deny("E_TICK_INVALID", ctx.tick_error)
-
-    // 2. Validate ConsentProof
-    (ctx.valid_consent, ctx.consent_error) =
-        pqsf_validate_consent(ctx.consent, ctx.session.exporter_hash, ctx.tick)
-
-    if not ctx.valid_consent:
-        return deny(ctx.consent_error)
-
-    // 3. Validate Policy Enforcer
-    (ctx.valid_policy, ctx.policy_error) =
-        pqsf_evaluate_policy(ctx.policy, ctx.policy_context)
-
-    if not ctx.valid_policy:
-        return deny(ctx.policy_error)
-
-    // 4. Optional runtime validity via PQVL
-    if ctx.has_pqvl:
-        (ctx.valid_runtime, ctx.runtime_error) =
-            pqsf_check_runtime(ctx.attestation, ctx.tick, ctx.attestation_window)
-        if not ctx.valid_runtime:
-            return deny("E_RUNTIME_INVALID", ctx.runtime_error)
-    else:
-        ctx.valid_runtime = true
-
-    // 5. Ledger integrity
-    (ctx.valid_ledger, ctx.ledger_error) =
-        pqsf_check_ledger(ctx.ledger_state, ctx.tick)
-
-    if not ctx.valid_ledger:
-        return deny("E_LEDGER_INVALID", ctx.ledger_error)
-
-    // 6. Quorum (child-spec: PQHD, etc.)
-    (ctx.valid_quorum, ctx.quorum_error) =
-        pqsf_check_quorum_if_applicable(ctx)
-
-    if not ctx.valid_quorum:
-        return deny("E_POLICY_THRESHOLD_FAILED", ctx.quorum_error)
-
-    // 7. Structural validity of all objects
-    if not pqsf_valid_structure(ctx):
-        return deny("E_TRANSPORT_CANONICAL_FAIL")
-
-    // 8. All predicates satisfied
-    return allow()
-```
+PQSF exists to eliminate ambiguity at the protocol layer. Canonical
+encoding prevents parser and representation attacks. CryptoSuiteProfile
+indirection enables algorithm agility without rewriting specifications.
+Exporter binding primitives allow session-scoped security without
+trusting networks or intermediaries. PQSF is deliberately minimal and
+foundational; all authority and enforcement semantics live elsewhere.
 
 ---
 
-## **SCOPE**
+## 1. Scope and Protocol Boundary
 
-PQSF covers:
+PQSF defines deterministic, post-quantum protocol primitives only.
 
-* temporal authority and freshness semantics (EpochTick)
-* explicit-intent binding, consent structures, and authorisation windows (ConsentProof)
-* deterministic policy evaluation, canonical policy hashing, and mandatory predicates (Policy Enforcer)
-* transport-layer session binding, exporter-hash semantics, and replay resistance (TLSE-EMP, STP)
-* canonical deterministic encoding for all security-relevant objects (CBOR / JCS JSON)
-* deterministic key-derivation and lifecycle rules based on cSHAKE256
-* deterministic Merkle-ledger construction, reconciliation, and freeze-on-error semantics
-* runtime-validity integration via the Probe API and PQVL
-* Encrypted-Before-Transport requirements for all sensitive artefacts
-* sovereign operation, including DNS-free STP, offline and Stealth-Mode support
-* privacy-preserving operation, including metadata minimisation and local-first verification
-* conformance profiles (MVP, FULL, EXTENDED) for interoperable deployments
-* optional identity, selective-disclosure, delegated-authority, and delegated-payment modules
-* optional wallet-backed, quantum-safe user authentication
-* optional privacy-preserving ecommerce flows (EphemeralSession, EphemeralCart)
-* cloud-sovereignty rules ensuring all PQSF artefacts are encrypted locally before storage or transmission
+PQSF normatively defines:
 
-PQSF does **not** define:
+* canonical encoding rules for protocol artefacts
+* cryptographic suite indirection via pinned profile references
+* deterministic hashing, signing, and derivation interfaces
+* exporter-bound session binding primitives
+* sovereign transport message grammars
+* deterministic object grammars for protocol artefacts
+* deterministic ledger entry format and Merkle serialization rules
+* encrypted-before-transport artefact wrapping rules
+* policy object structure and governance metadata
 
-* runtime measurement logic (see PQVL 1.1–1.2)
-* AI alignment (see PQAI 1.1–1.2)
-* tick issuance or profile lineage (see Epoch Clock 1.1–1.2 and 3.6.1)
-* identity storage or application-specific data flows
+**Protocol Boundary:**
+PQSF defines protocol grammar, canonical encoding, and structural validation requirements only.
 
-PQSF allows—but does not require—external attestation systems such as PQVL to supply runtime-validity predicates.
+**Enforcement Boundary:**
+PQSF does not perform enforcement, gating, admission, refusal, escalation, lockout, freshness enforcement, monotonicity enforcement, or authority decisions. All such behaviour is defined exclusively by consuming specifications, including PQSEC and domain specifications.
 
-### Pseudocode (Informative) — Validating a PQSF Context Object
-
-```pseudo
-// Generic sanity check over a "PQSF context" grouping all primitives
-function pqsf_validate_context(ctx):
-    if not pqsf_is_canonical(ctx.epoch_tick):
-        return false
-
-    if not pqsf_is_canonical(ctx.consent):
-        return false
-
-    if not pqsf_is_canonical(ctx.policy):
-        return false
-
-    if not pqsf_is_canonical(ctx.ledger_entry_template):
-        return false
-
-    // Further checks are spec-section-specific, but this
-    // ensures at least structural correctness
-    return true
-```
+**Non-Protocol Behaviour:**
+Any implementation using PQSF primitives for enforcement, refusal, escalation, lockout, freshness enforcement, monotonicity enforcement, or authority decisions outside PQSEC is architecturally non conformant.
 
 ---
 
-# **WHAT THIS SPECIFICATION COVERS**
+## 2. Non Goals and Authority Prohibition
 
-This specification defines:
+PQSF does not define:
 
-1. **Temporal authority (EpochTick)** — structure, signature validation, freshness, monotonicity, and profile-ref rules enabling privacy- and sovereignty-preserving time validation.
+* predicate enforcement, refusal, escalation, lockout, backoff, or freeze semantics
+* runtime integrity attestation semantics or drift classification semantics
+* custody tiers, signing authority, quorum authority, or PSBT authority semantics
+* AI behavioural gating, action class admission control, or model authority semantics
+* Epoch Clock anchoring, issuance, mirror consensus enforcement, tick freshness enforcement, or tick reuse enforcement
+* application business logic, UI behaviour, or user workflows
 
-2. **Intent authority (ConsentProof)** — canonical structure, tick-bounded validity, exporter-bound session semantics, and explicit, privacy-preserving user-intent enforcement.
-
-3. **Policy authority (Policy Enforcer)** — deterministic policy evaluation, mandatory predicates, thresholds, limits, time windows, and canonical hashing for centralisation-free enforcement.
-
-4. **Transport binding** — deterministic TLS (TLSE-EMP) and sovereign transport (STP), including exporter-hash binding, replay resistance, metadata minimisation, offline operation, and Stealth-Mode behaviour.
-
-5. **Canonical encoding** — deterministic CBOR and JCS JSON encoding for all security-relevant objects, ensuring cross-implementation reproducibility and minimising metadata leakage.
-
-6. **Deterministic key-derivation** — cSHAKE256-based derivation rules for identity, consent, transport, audit, delegation, and recovery keys, with no reliance on local clocks or entropy.
-
-7. **Deterministic ledger** — append-only, Merkle-verified, monotonic event recording with reconciliation, freeze-on-error semantics, and sovereignty-preserving local operation.
-
-8. **Encrypted-Before-Transport (EBT)** — a mandatory requirement that all sensitive artefacts be encrypted locally prior to transmission or storage across any transport, including cloud environments.
-
-9. **Probe API integration** — a standardised interface for runtime, privacy, and AI-related probes, consumed by PQVL, PQAI, and other modules requiring deterministic validation inputs.
-
-10. **Sovereign and offline operation** — rules enabling DNS-free STP, offline tick reuse, Stealth-Mode constraints, and deterministic behaviour under partitioned or air-gapped deployments.
-
-11. **Compliance profiles** — MVP, FULL, and EXTENDED deployment profiles for constrained, offline, sovereign, or multi-device ecosystems.
-
-12. **Optional identity and authority modules** — selective-disclosure identity credentials, delegated-identity, and delegated-payment flows, each using canonical tick-bound, consent-bound structures.
-
-13. **Optional wallet-backed authentication** — deterministic, exporter-bound, quantum-safe login mechanisms using PQHD-derived identity keys.
-
-14. **Optional privacy-preserving ecommerce flows** — EphemeralSession and EphemeralCart structures that support metadata-minimal merchant interactions.
-
-External attestation systems such as PQVL may satisfy PQSF’s runtime-validity predicate but are not required.
+**Authority Prohibition:**
+PQSF grants no authority, makes no decisions, and performs no enforcement. PQSF defines encodings, structures, and validation rules only. Authority derives exclusively from PQSEC enforcement of PQSF-defined artefacts.
 
 ---
 
-## **Security Uplift (INFORMATIVE)**
+## 3. Threat Model
 
-PQSF introduces an authenticated temporal authority (Epoch Clock), ensuring operations occur under a fresh, verifiable time source rather than untrusted system time. This removes replay, rollback, forged expiry, and NTP dependency issues.
+PQSF assumes adversaries may:
 
-ConsentProof binds user intent to specific actions with tick-bound validity windows. Policy Enforcer enforces deterministic, tick-bound, policy-bound evaluation for sensitive operations.
+* replay, reorder, or substitute protocol messages
+* inject non canonical encodings
+* exploit ambiguity in serialization
+* attempt downgrade via alternate encodings or cryptographic identifiers
+* attempt cross-session artefact reuse
+* attempt partial object substitution inside larger payloads
+* attempt metadata correlation through transport or storage intermediaries
 
-PQSF integrates PQVL for runtime integrity verification (see PQVL 6), preventing operations under tampered execution environments. Deterministic encoding, exporter binding, and fail-closed semantics unify the system against replay, downgrade, and malleability attacks.
-
----
-
-# **2. ARCHITECTURE OVERVIEW (NORMATIVE)**
-
-PQSF defines the shared primitives used by higher-level protocols.
-
-## **2.1 Components**
-
-1. **Temporal Authority (Epoch Clock)**
-2. **Intent Authority (ConsentProof)**
-3. **Policy Authority (Policy Enforcer)**
-4. **Transport Security (TLSE-EMP)**
-5. **Sovereign Transport Protocol (STP)**
-6. **Deterministic Derivation**
-7. **Ledger**
-
-### Pseudocode (Informative) — Architectural Data Flow
-
-```pseudo
-// Abstract data flow through PQSF components
-function pqsf_process_operation(op_ctx):
-    // Temporal authority
-    (valid_tick, tick_err) =
-        pqsf_validate_tick(op_ctx.tick, op_ctx.pinned_profile_ref, op_ctx.last_tick)
-    if not valid_tick:
-        return deny(tick_err)
-
-    // Intent authority
-    (valid_consent, consent_err) =
-        pqsf_validate_consent(op_ctx.consent, op_ctx.session.exporter_hash, op_ctx.tick)
-    if not valid_consent:
-        return deny(consent_err)
-
-    // Policy authority
-    (valid_policy, policy_err) =
-        pqsf_evaluate_policy(op_ctx.policy, op_ctx.policy_context)
-    if not valid_policy:
-        return deny(policy_err)
-
-    // Transport
-    if not pqsf_validate_transport(op_ctx.session):
-        return deny("E_EXPORTER_MISMATCH")
-
-    // Ledger
-    pqsf_append_ledger_event(op_ctx.ledger, op_ctx.event_template, op_ctx.tick)
-
-    return allow()
-```
-
-## **2.2 Minimal Compliance**
-
-Three compliance levels:
-
-* MVP
-* FULL
-* EXTENDED
-
-Defined in Annex A.
-
-## **2.3 Design Principles**
-
-* determinism
-* fail-closed semantics
-* quantum safety
-* canonical encoding
-* explicit tick binding
-* OS-agnostic behaviour
-* stateless transport
-
-## **2.4 Device Identity in PQSF Consumers (INFORMATIVE)**
-
-Allows:
-
-* PQVL-derived attested identity
-* deterministic minimal device identity
-
-Identity mismatch MUST cause fail-closed behaviour.
-
-## **2.5 Independence from Central Infrastructure (INFORMATIVE)**
-
-All PQSF continuity derives from exporter binding, deterministic encoding, and on-chain Epoch Clock profiles. No DNS, NTP, PKI, or cloud dependency.
+PQSF does not assume trusted networks, trusted clocks, trusted runtimes, trusted coordinators, or trusted storage providers.
 
 ---
 
-# **3. CRYPTOGRAPHIC PRIMITIVES (NORMATIVE)**
+## 4. Trust Assumptions
 
-## **3.1 Hash Functions**
+PQSF operates under the following trust assumptions:
 
-PQSF MUST use SHAKE256-256 for:
+* cryptographic verification is performed locally by consumers
+* canonical encoding eliminates ambiguity in hashing and signing
+* exporter binding derives from authenticated transport session secrets
+* time artefacts and profile lineage are external inputs
+* enforcement, authority, and admission decisions are external to PQSF
 
-* event hashing
-* canonical object hashing
-* Merkle nodes
-* derivation contexts
+---
 
-### Pseudocode (Informative) — Canonical Object Hash
+## 5. Architecture Overview
 
-```pseudo
-// Hash a PQSF object deterministically
-function pqsf_hash_object(obj):
-    bytes = pqsf_canonical_encode(obj)   // CBOR or JCS JSON
-    return shake256_256(bytes)
+PQSF defines a protocol substrate consisting of:
+
+* **Canonical Encoding Layer**
+  Deterministic CBOR strict profile for all PQSF-native signed, hashed, or compared objects.
+
+* **External Canonical Artefact Exception**
+  Epoch Clock profiles and ticks are externally canonicalized and MUST use JCS Canonical JSON exclusively. They are not PQSF-native CBOR objects.
+
+* **Cryptographic Suite Indirection Layer**
+  All cryptographic operations reference pinned CryptoSuiteProfile objects.
+
+* **Protocol Object Layer**
+  Canonical object grammars for PQSF-native protocol artefacts and wrappers.
+
+* **Transport Binding Layer**
+  Exporter hash derivation and binding fields for session-bound artefacts.
+
+* **Sovereign Transport Grammar Layer**
+  Deterministic STP message grammar.
+
+* **Ledger Serialization Layer**
+  Deterministic Merkle construction rules.
+
+PQSF defines object structure and validation rules only. PQSF does not define operational behaviour.
+
+---
+
+## 5A. Explicit Dependencies
+
+| Specification | Minimum Version | Purpose |
+|---------------|-----------------|---------|
+| Epoch Clock | ≥ 2.1.1 | JCS Canonical JSON artefact handling exception |
+
+PQSF is foundational infrastructure. Most PQ specifications depend on PQSF; PQSF depends only on Epoch Clock for the canonical JSON encoding exception.
+
+---
+
+## 6. Conformance Keywords
+
+The key words MUST, MUST NOT, REQUIRED, SHALL, SHALL NOT, SHOULD, SHOULD NOT, RECOMMENDED, MAY, and OPTIONAL are to be interpreted as described in RFC 2119.
+
+---
+
+## 7. Canonical Encoding
+
+### 7.1 PQSF-Native Canonical Encoding (Deterministic CBOR Only)
+
+1. All PQSF-native protocol objects that are hashed, signed, compared, or used in Authoritative decisions MUST be encoded using Deterministic CBOR.
+2. The CBOR encoding MUST follow RFC 8949 deterministic encoding rules with the additional strict constraints defined in Section 7.2.
+3. Re-encoding a decoded object MUST produce byte-identical output.
+4. Non canonical encodings MUST be rejected.
+5. JSON representations MAY be used only for unsigned display or transport wrappers and MUST NOT be hashed or signed.
+
+### 7.2 Strict CBOR Profile
+
+The following constraints are mandatory:
+
+1. Integer values MUST use the shortest encoding form.
+2. Floating-point values MUST NOT appear in any canonical artefact.
+
+   **Rationale:**
+   * IEEE 754 floating-point has multiple binary representations:
+     - NaN has 2^52 distinct bit patterns
+     - Positive zero (+0.0) and negative zero (−0.0) are distinct
+     - Subnormal numbers and rounding behaviour vary by platform
+   * These properties violate byte-identical re-encoding requirements.
+   * Non-deterministic encoding breaks hashing, signing, and verification.
+
+   **Permitted Alternatives:**
+   * **Fixed-point integers:** value + scale (e.g., 234 / 10000 = 0.0234)
+   * **Rational numbers:** numerator + denominator
+   * **Integer units:** smallest unit representation (e.g., milliseconds instead of seconds)
+
+   **Error Code:** `E_ENCODING_NONCANONICAL`
+
+   **Exceptions:** None. Floating-point values are forbidden in all
+   PQSF-native canonical CBOR artefacts, including informational fields.
+3. Indefinite-length items MUST NOT be used.
+4. Map keys MUST be unique. Duplicate keys MUST cause rejection.
+5. Map key ordering MUST be bytewise lexicographic over the encoded key bytes.
+6. Text and byte strings are distinct and MUST NOT be coerced.
+7. CBOR tags MUST NOT be used unless explicitly permitted by a consuming specification profile.
+
+
+## 7.3 Fuzzing Resistance via Canonical Encoding
+
+### 7.3.1 Canonical Encoding as Fuzzing Defense
+
+Deterministic canonical encoding is PQSF’s primary defense against
+structural fuzzing attacks.
+
+**Attack Model:**
+Adversaries may supply semantically equivalent but byte-different
+encodings to exploit:
+- parser ambiguities
+- hash or signature mismatches
+- state-machine edge cases
+- inconsistent error handling
+
+**Defense Strategy:**
+Canonical encoding collapses all semantic equivalents into a single
+byte representation. Structural ambiguity is eliminated as an attack
+surface.
+
+---
+
+### 7.3.2 Eliminated Encoding Fuzzing Vectors
+
+**JSON Key Reordering**
+```json
+{"a": 1, "b": 2}
+{"b": 2, "a": 1}
 ```
 
-## **3.2 Key Derivation**
+Mitigation: CBOR map keys MUST be sorted bytewise lexicographically.
 
-PQSF uses **cSHAKE256** for deterministic derivation of:
+---
 
-* audit keys
-* identity keys
-* delegation keys
-* consent keys
-* transport keys
-* recovery keys
-* device-bound keys
-
-### **3.3 Universal Secret Derivation (NORMATIVE)**
-
-PQSF supports deterministic derivation of domain-scoped secrets:
+**CBOR Length Encoding Variants**
 
 ```
-Secret = cSHAKE256(root_seed,
-                   domain="PQSF-Secret:<context>",
-                   input=canonical(context_parameters))
+18 42      // integer 66 (short form)
+19 00 42   // integer 66 (long form)
 ```
 
-Secrets MUST be:
+Mitigation: Only shortest encoding form is permitted.
 
-* deterministic
-* unlinkable
-* canonical-input-derived
+---
 
-This enables PQHD or other consumers to behave as universal password/security managers — PQSF itself defines only the primitives.
+**Floating-Point Variants**
 
-### Pseudocode (Informative) — Universal Secret Derivation
-
-```pseudo
-// Derive a scoped secret from a root seed and context
-function pqsf_derive_secret(root_seed, context_label, context_params):
-    domain = "PQSF-Secret:" + context_label
-    input_bytes = pqsf_canonical_encode(context_params)
-    return cshake256(root_seed, domain, input_bytes)
+```
++0.0, -0.0, NaN, subnormals
 ```
 
-## **3.4 Post-Quantum Signatures**
+Mitigation: Floating-point values are forbidden entirely.
 
-PQSF MUST use ML-DSA-65 for:
+---
 
-* consent proofs
-* policy bundles
-* ledger entries
-* session-bound objects
+**Indefinite-Length Encoding**
 
-### Pseudocode (Informative) — ML-DSA Sign / Verify Wrapper
-
-```pseudo
-function pqsf_sign_pq(sk_pq, obj):
-    bytes = pqsf_canonical_encode(obj)
-    sig = ml_dsa_65_sign(sk_pq, bytes)
-    return sig
-
-function pqsf_verify_pq(pk_pq, obj, sig):
-    bytes = pqsf_canonical_encode(obj)
-    return ml_dsa_65_verify(pk_pq, bytes, sig)
+```
+9F 01 02 03 FF   // indefinite-length array
+83 01 02 03      // definite-length array
 ```
 
-## **3.5 Canonical Encoding**
+Mitigation: Indefinite-length items MUST be rejected.
 
-Deterministic CBOR or JCS JSON MUST be used.
-Re-encoding between hashing and signing is forbidden.
+---
 
-### Pseudocode (Informative) — Canonical Encoding Selection
+**Unicode Normalization**
 
-```pseudo
-// Global configuration
-const PQSF_ENCODING_MODE = "JCS_JSON"  // or "CBOR"
+```
+"café"  // NFC vs NFD representations
+```
 
-function pqsf_canonical_encode(obj):
-    if PQSF_ENCODING_MODE == "JCS_JSON":
-        return jcs_canonical_json_encode(obj)
-    else:
-        return deterministic_cbor_encode(obj)
+Mitigation: CBOR text strings are raw byte sequences; no protocol-level
+normalization occurs.
 
-function pqsf_is_canonical(bytes):
-    decoded   = decode(bytes)             // chosen encoding
-    reencoded = pqsf_canonical_encode(decoded)
-    return (reencoded == bytes)
+---
+
+### 7.3.3 Canonical Encoding Test Requirements
+
+Implementations MUST pass the following tests:
+
+```python
+def test_reencoding_stability():
+    original = canonical_encode(obj)
+    decoded = canonical_decode(original)
+    reencoded = canonical_encode(decoded)
+    assert original == reencoded
+```
+
+```python
+def test_noncanonical_rejection():
+    noncanonical = bytes([0x19, 0x00, 0x42])
+    with pytest.raises(EncodingError):
+        canonical_decode(noncanonical)
+```
+
+```python
+def test_cross_implementation_consistency():
+    a = impl_a.encode(obj)
+    b = impl_b.encode(obj)
+    assert a == b
 ```
 
 ---
 
-# **4. TEMPORAL AUTHORITY — EPOCH TICK (NORMATIVE)**
+### 7.3.4 Conformance
 
-PQSF uses the Epoch Clock as the authoritative source of time across all ConsentProof, Policy Enforcer, ledger, and session-bound operations.
-The Epoch Clock is defined on-chain via a **parent inscription (Epoch Clock v2)**, with all subsequent updates published as **child inscriptions**.
+PQSF conformant implementations MUST:
 
-PQSF does not define Clock issuance; it defines how Clock profiles and ticks are **validated**.
+* ☐ Produce byte-identical encodings for identical semantic input
+* ☐ Reject all non-canonical encodings
+* ☐ Enforce shortest encoding form
+* ☐ Reject indefinite-length items
+* ☐ Reject floating-point values
+* ☐ Enforce deterministic map key ordering
+* ☐ Pass all canonical encoding test vectors
+
+
+### 7.4 Epoch Clock Canonical Encoding Exception (JCS Canonical JSON Only)
+
+1. Epoch Clock profiles and ticks MUST be processed, hashed, and verified in their JCS Canonical JSON byte form exclusively.
+2. Epoch Clock artefacts are externally canonicalized.
+3. Epoch Clock artefacts MUST NOT be re-encoded into CBOR or any other format for the purposes of hashing, signing, comparison, or signature verification.
+4. Any PQSF-native object that needs to bind to an Epoch Clock profile or tick MUST bind using either:
+
+   * the Epoch Clock artefact bytes directly, or
+   * a hash computed over the Epoch Clock artefact bytes under a referenced hash-class CryptoSuiteProfile.
+5. Transport carriage MAY embed Epoch Clock artefacts as opaque bytes. Parsing is permitted for routing or display only and MUST NOT alter the verified byte identity.
 
 ---
 
-## **4.1 Tick Structure**
+## 8. CryptoSuiteProfile Indirection
 
-All PQSF implementations MUST support the following canonical EpochTick structure:
+PQSF replaces all hardcoded cryptographic algorithm identifiers with profile references.
 
-```text
-EpochTick = {
-  "t": uint,
-  "profile_ref": tstr,
-  "alg": "ML-DSA-65",
-  "sig": bstr
+### 8.1 CryptoSuiteProfile Definition
+
+```
+CryptoSuiteProfile = {
+  profile_id: tstr,
+  suite_class: "signature" / "hash" / "kem" / "aead" / "derivation",
+  family: tstr,
+  parameters: { * tstr => any },
+  domain_set_id: tstr,
+  test_vector_hash: bstr,
+  valid_from_tick: uint,
+  valid_until_tick: uint / null,
+  revoked: bool,
+  signature: bstr
 }
 ```
 
-### Tick validation requirements:
+### 8.2 Profile Rules
 
-Ticks MUST be:
+1. All cryptographic operations MUST reference a CryptoSuiteProfile by profile_id.
+2. Profiles MUST be signed and pinned by hash.
+3. Unknown, expired, or revoked profiles MUST cause rejection.
+4. Profile downgrade is forbidden. A regressed profile is one whose security properties, parameter strength, or effective validity window are strictly weaker than a previously accepted profile within the same profile lineage.
+5. Profile validity evaluation, including tick interpretation, is performed by consuming specifications. PQSF treats profiles as inert data structures only.
+6. Profile revocation state MUST be discoverable via authenticated profile distribution or authenticated revocation artefacts defined by consuming specifications.
+7. Profile revocation MUST be honoured immediately for Authoritative operations.
 
-* ML-DSA-65 signature verified
-* encoded using deterministic CBOR or JCS JSON
-* consistent with the currently pinned Epoch Clock profile
-* fresh (≤900 seconds old by default)
-* monotonic (strictly increasing `t`)
+### 8.3 Profile Distribution Architecture
 
-PQSF is pinned to the following Epoch Clock profile:
+#### 8.3.1 Distribution Mechanisms
 
-```
-pinned_profile_ref = "ordinal:439d7ab1972803dd984bf7d5f05af6d9f369cf52197440e6dda1d9a2ef59b6ebi0"
-```
+Profile distribution provides the means for implementations to discover and update CryptoSuiteProfiles.
 
-All EpochTicks validated under PQSF MUST reference this profile_ref.
-Ticks referencing any other profile MUST be rejected and MUST cause fail-closed behaviour.
+1. **Bootstrap profiles** MUST be hardcoded in implementations.
+2. **Profile updates** MUST be signed by governance keys.
+3. **Profile discovery** MAY use:
+   * HTTPS endpoints with certificate pinning
+   * Gossip protocols (with signature verification)
+   * Local profile cache with update mechanism
 
-### Pseudocode (Informative) — Inline Tick Validation
+#### 8.3.2 Profile Update Protocol
 
-```pseudo
-function pqsf_validate_tick(tick, pinned_profile_ref, last_tick):
-    if tick.profile_ref != pinned_profile_ref:
-        return (false, "E_TICK_PROFILE_MISMATCH")
+The following protocol enables secure profile updates:
 
-    if tick.alg != "ML-DSA-65":
-        return (false, "E_TICK_INVALID")
-
-    if not pqsf_verify_pq(epoch_clock_pubkey_for_profile(tick.profile_ref), {
-        t: tick.t,
-        profile_ref: tick.profile_ref,
-        alg: tick.alg
-    }, tick.sig):
-        return (false, "E_TICK_INVALID")
-
-    if last_tick != null and tick.t <= last_tick.t:
-        return (false, "E_TICK_ROLLBACK")
-
-    if (pqsf_unix_now_from_clock() - tick.t) > 900:
-        return (false, "E_TICK_STALE")
-
-    return (true, null)
-```
-
----
-
-## **4.2 Profile Structure & Parent/Child Clock Selection**
-
-The Epoch Clock v2 profile is published as a **parent inscription**.
-Updates are published as **child inscriptions**, forming a deterministic lineage.
-
-### Active profile selection rules:
-
-1. Identify the parent Epoch Clock v2 inscription.
-2. Enumerate all child inscriptions linked to the parent.
-3. Select the **most recent valid child** inscription as the active profile.
-4. If no children exist, the parent is the active profile.
-5. Validate the canonical encoding and profile hash.
-6. Pin the active profile for all subsequent tick validation.
-7. If a child is malformed or invalid → fail-closed and fall back to the last known valid profile.
-
-This model ensures that the Epoch Clock is externally controlled while PQSF locally verifies lineage.
-
-### Pseudocode (Informative) — Active Profile Resolution
-
-```pseudo
-function pqsf_select_active_profile(parent_inscription, child_inscriptions):
-    valid_children = []
-
-    for child in child_inscriptions:
-        if pqsf_validate_profile_child(parent_inscription, child):
-            valid_children.append(child)
-
-    if len(valid_children) == 0:
-        return parent_inscription.profile_ref
-
-    latest = select_child_with_max_height(valid_children)
-    return latest.profile_ref
-```
-
----
-
-## **4.3 Freshness Rule (Tick Age Limit)**
-
-Given:
-
-```text
-current_tick = latest_validated_tick()
-```
-
-A tick is valid iff:
-
-```text
-t_current - t_issued <= 900 seconds
-```
-
-Deployments MAY configure stricter bounds.
-
-Expired ticks MUST cause:
-
-* `valid_tick = false`
-* all dependent operations (consent, policy, ledger) to fail-closed
-
----
-
-## **4.4 Monotonicity**
-
-PQSF enforces temporal strictness:
+1. Client queries known distribution endpoints for profile updates.
+2. Distribution endpoint returns a ProfileUpdate artefact:
 
 ```
-tick_new.t > tick_previous.t
-```
-
-If violated, PQSF MUST:
-
-* reject the tick,
-* halt dependent operations,
-* require a fresh tick,
-* revalidate the profile_ref.
-
----
-
-## **4.5 profile_ref Validation**
-
-Each EpochTick MUST reference the active Clock profile.
-
-PQSF MUST verify:
-
-* profile_ref corresponds to:
-
-  * the parent inscription, or
-  * the most recent valid child inscription
-* canonical profile hash
-* ML-DSA-65 signature on the profile
-* lineage consistency
-
-Ticks referencing unknown or invalid profiles MUST be rejected.
-
----
-
-## **4.6 TickCache**
-
-Implementations **MAY** cache validated ticks for up to 900 seconds.
-
-TickCache MUST be invalidated if:
-
-* the active profile changes
-* a transport session restarts
-* PQVL runtime attestation fails
-* monotonicity is violated
-
-TickCache MUST NOT bypass freshness or signature rules.
-
-### Pseudocode (Informative) — TickCache Management
-
-```pseudo
-function pqsf_get_valid_tick(cache, pinned_profile_ref, now_unix):
-    if cache.tick is not null:
-        // Check if cached tick still valid
-        (valid, err) = pqsf_validate_tick(cache.tick, pinned_profile_ref, cache.last_tick)
-        if valid and (now_unix - cache.tick.t) <= 900:
-            return cache.tick
-
-    // Otherwise fetch a fresh tick from Epoch Clock
-    tick = epoch_clock_fetch_latest()
-    (valid, err) = pqsf_validate_tick(tick, pinned_profile_ref, cache.last_tick)
-    if not valid:
-        raise err
-
-    cache.tick = tick
-    cache.last_tick = tick
-    return tick
-```
-
----
-
-# **5. INTENT AUTHORITY — CONSENTPROOF (NORMATIVE)**
-
-ConsentProof binds **user intent** to **action**, **transport session**, and **temporal authority**, ensuring explicit, verifiable authorisation.
-
----
-
-## **5.1 Structure**
-
-```
-ConsentProof = {
-  "action": tstr,
-  "intent_hash": bstr,
-  "tick_issued": uint,
-  "tick_expiry": uint,
-  "exporter_hash": bstr,
-  "role": tstr / null,
-  "consent_id": tstr,
-  "signature_pq": bstr
+ProfileUpdate = {
+  profile: CryptoSuiteProfile,
+  governance_sigs: [* {
+    signer_id: tstr,
+    sig: bstr
+  }],
+  valid_from_tick: uint,
+  update_priority: "CRITICAL" / "RECOMMENDED" / "OPTIONAL"
 }
 ```
 
----
+3. Client verifies M-of-N governance signatures over canonical ProfileUpdate payload.
+4. Client validates profile compatibility (no downgrade per Section 8.2).
+5. Client stages profile for activation at valid_from_tick.
+6. At valid_from_tick, client activates new profile for all future operations.
 
-## **5.2 Canonicalisation**
+#### 8.3.3 Profile Update Validation
 
-ConsentProof MUST be canonically encoded using:
+Before accepting a ProfileUpdate:
 
-* deterministic CBOR **or**
-* JCS JSON (RFC 8785)
+1. Verify that governance_sigs contains at least M valid signatures.
+2. Verify each signature against known governance public keys.
+3. Verify that profile.valid_from_tick >= current_tick.
+4. Verify that profile does not regress security properties.
+5. Verify that profile.signature is valid (self-signature by profile authority).
 
-Non-canonical forms MUST be rejected.
+### 8.4 Profile Revocation Handling
 
-### Pseudocode (Informative) — Building a ConsentProof
+Profile revocation enables the invalidation of compromised or deprecated cryptographic profiles.
 
-```pseudo
-function pqsf_build_consent(action, intent_obj, tick, exporter_hash, role_opt):
-    intent_hash = pqsf_hash_object(intent_obj)
-
-    consent = {
-        action:        action,
-        intent_hash:   intent_hash,
-        tick_issued:   tick.t,
-        tick_expiry:   tick.t + 900,   // or stricter
-        exporter_hash: exporter_hash,
-        role:          role_opt,
-        consent_id:    generate_uuid()
-    }
-
-    consent_bytes = pqsf_canonical_encode(consent)
-    consent.signature_pq = ml_dsa_65_sign(consent_sk, consent_bytes)
-    return consent
-```
-
----
-
-## **5.3 Tick Binding**
-
-Consent validity requires both:
+#### 8.4.1 ProfileRevocation Artefact
 
 ```
-tick_issued <= current_tick.t
-```
-
-and:
-
-```
-current_tick.t <= tick_expiry
-```
-
-Tick expiry defaults to **≤900 seconds**, unless stricter child-spec rules apply.
-
-Violation → `E_CONSENT_EXPIRED` or `E_CONSENT_INVALID`.
-
----
-
-## **5.4 Exporter Binding (Session Binding)**
-
-ConsentProof MUST bind to the active transport session:
-
-```text
-ConsentProof.exporter_hash == session.exporter_hash
-```
-
-Mismatch →
-`valid_consent = false` → `E_CONSENT_EXPORTER_MISMATCH`.
-
-This ensures consent cannot be replayed across TLS/STP sessions.
-
----
-
-## **5.5 Role Binding**
-
-If used (e.g., PQHD, PQAI):
-
-* role MUST be canonical
-* role MUST match expected action semantics
-
-PQSF does not define roles; it validates bindings only.
-
----
-
-## **5.6 Signature Requirements**
-
-ConsentProof MUST be signed with ML-DSA-65.
-
-Signature failure MUST cause fail-closed behaviour.
-
-### Pseudocode (Informative) — Consent Validation
-
-```pseudo
-function pqsf_validate_consent(consent, exporter_hash, current_tick):
-    // Canonical and signature check
-    bytes = pqsf_canonical_encode({
-        action:        consent.action,
-        intent_hash:   consent.intent_hash,
-        tick_issued:   consent.tick_issued,
-        tick_expiry:   consent.tick_expiry,
-        exporter_hash: consent.exporter_hash,
-        role:          consent.role,
-        consent_id:    consent.consent_id
-    })
-
-    if not ml_dsa_65_verify(consent_pk, bytes, consent.signature_pq):
-        return (false, "E_CONSENT_SIGNATURE_INVALID")
-
-    // Exporter binding
-    if consent.exporter_hash != exporter_hash:
-        return (false, "E_CONSENT_EXPORTER_MISMATCH")
-
-    // Tick window
-    if consent.tick_issued > current_tick.t:
-        return (false, "E_CONSENT_INVALID")
-
-    if current_tick.t > consent.tick_expiry:
-        return (false, "E_CONSENT_EXPIRED")
-
-    return (true, null)
-```
-
----
-
-# **6. POLICY AUTHORITY — POLICY ENFORCER (NORMATIVE)**
-
-The Policy Enforcer enforces policy in a deterministic, tick-bound, canonical manner.
-It is the **policy enforcement layer** for wallets, AI systems, and sensitive automation.
-
----
-
-## **6.1 Structure**
-
-```
-PolicyEnforcerPolicy = {
-  "policy_id": tstr,
-  "policy_hash": bstr,
-  "allowlist": [* tstr],
-  "denylist":  [* tstr],
-  "thresholds": { * tstr => uint },
-  "limits":     { * tstr => uint },
-  "time_rules": {
-      "min_delay": uint,
-      "max_window": uint
-  },
-  "constraints": { * tstr => any }
+ProfileRevocation = {
+  revoked_profile_id: tstr,
+  revoked_at_tick: uint,
+  reason: tstr,
+  superseded_by_profile_id: tstr / null,
+  governance_sigs: [* {
+    signer_id: tstr,
+    sig: bstr
+  }]
 }
 ```
 
----
+#### 8.4.2 Revocation Requirements
 
-## **6.2 Canonicalisation**
+1. Revocations MUST be signed by M-of-N governance keys.
+2. Revocations MUST be checked before each Authoritative operation.
+3. If superseded_by_profile_id is present, clients SHOULD automatically upgrade to the replacement profile.
+4. Grace period: 48 hours from revoked_at_tick for Non-Authoritative operations.
+5. Authoritative operations MUST refuse immediately upon revocation discovery.
 
-Policy MUST be canonicalised using deterministic CBOR/JCS.
-The policy_hash MUST equal:
+#### 8.4.3 Revocation Discovery
 
-```
-SHAKE256-256(canonical(policy))
-```
+Implementations MUST:
 
-Mismatch → `E_POLICY_HASH_MISMATCH`.
+1. Check for revocations at startup.
+2. Periodically poll revocation endpoints (recommended: every 3600 seconds).
+3. Cache revocation list locally.
+4. Accept revocation push notifications from distribution infrastructure where available.
 
-### Pseudocode (Informative) — Policy Hashing
+### 8.5 Emergency Cryptographic Transition
 
-```pseudo
-function pqsf_compute_policy_hash(policy_without_hash):
-    bytes = pqsf_canonical_encode(policy_without_hash)
-    return shake256_256(bytes)
+Emergency transitions address catastrophic cryptographic failures.
 
-function pqsf_verify_policy_hash(policy):
-    tmp = clone(policy)
-    tmp.policy_hash = null
-    expected = pqsf_compute_policy_hash(tmp)
-    return (policy.policy_hash == expected)
-```
+#### 8.5.1 Emergency Profile Requirements
 
----
+In case of algorithm compromise:
 
-## **6.3 Required Predicates**
+1. **Emergency Profile Creation:**
+   * CAN violate non-downgrade rule if compromise is cryptographically proven
+   * MUST be signed by emergency_quorum (all governance keys, no threshold)
+   * MUST include compromise_evidence_hash referencing public disclosure
 
-PQSF defines the seven mandatory predicates:
-
-```
-valid_tick
-AND valid_consent
-AND valid_policy
-AND valid_runtime       // PQVL
-AND valid_quorum        // child-spec defined
-AND valid_ledger
-AND valid_structure     // schema/encoding validity
-```
-
-Child specs MAY add predicates but MUST NOT remove any.
-
-### Pseudocode (Informative) — Combined Predicate Evaluation
-
-```pseudo
-function pqsf_evaluate_all_predicates(ctx):
-    if not ctx.valid_tick:
-        return false
-
-    if not ctx.valid_consent:
-        return false
-
-    if not ctx.valid_policy:
-        return false
-
-    if ctx.requires_runtime and not ctx.valid_runtime:
-        return false
-
-    if ctx.requires_quorum and not ctx.valid_quorum:
-        return false
-
-    if not ctx.valid_ledger:
-        return false
-
-    if not pqsf_valid_structure(ctx):
-        return false
-
-    return true
-```
-
----
-
-## **6.4 Tick-Dependent Rules**
-
-Policy Enforcer MUST reject if:
-
-* minimum delay not satisfied
-* window exceeded
-* tick expired
-* monotonicity violated
-
----
-
-## **6.5 Allowlist / Denylist Enforcement**
-
-If `allowlist` is **not** empty:
+2. **Emergency Profile Structure:**
 
 ```
-destination ∉ allowlist → valid_policy = false
-```
-
-If destination appears in `denylist`:
-
-```
-valid_policy = false
-```
-
-Destination semantics belong to child specifications.
-
----
-
-## **6.6 Threshold & Constraint Rules**
-
-Thresholds and limits are deployment- or child-spec-defined.
-PQSF defines deterministic enforcement only.
-
-Examples:
-
-* spending thresholds (PQHD)
-* API call limits
-* content-type restrictions
-
-Failure MUST yield `E_POLICY_THRESHOLD_FAILED` or `E_POLICY_CONSTRAINT_FAILED`.
-
----
-
-## **6.7 Signature Bundles**
-
-Policy bundles MUST be:
-
-* canonical
-* tick-bound
-* signed with ML-DSA-65
-
-Policy rotation MUST appear in the ledger.
-
-### Pseudocode (Informative) — Policy Evaluation Function
-
-```pseudo
-function pqsf_evaluate_policy(policy, ctx):
-    if not pqsf_verify_policy_hash(policy):
-        return (false, "E_POLICY_HASH_MISMATCH")
-
-    // allowlist / denylist
-    if len(policy.allowlist) > 0 and ctx.destination not in policy.allowlist:
-        return (false, "E_POLICY_CONSTRAINT_FAILED")
-
-    if ctx.destination in policy.denylist:
-        return (false, "E_POLICY_CONSTRAINT_FAILED")
-
-    // time rules
-    delta = ctx.current_tick.t - ctx.request_created_tick.t
-    if delta < policy.time_rules.min_delay:
-        return (false, "E_POLICY_CONSTRAINT_FAILED")
-
-    if delta > policy.time_rules.max_window:
-        return (false, "E_POLICY_CONSTRAINT_FAILED")
-
-    // thresholds / limits
-    if not thresholds_satisfied(policy.thresholds, ctx.metrics):
-        return (false, "E_POLICY_THRESHOLD_FAILED")
-
-    if not limits_satisfied(policy.limits, ctx.metrics):
-        return (false, "E_POLICY_CONSTRAINT_FAILED")
-
-    return (true, null)
-```
-
----
-
-# **7. TRANSPORT SECURITY — TLSE-EMP AND STP (NORMATIVE)**
-
-PQSF defines two transport models that bind session identity, runtime state, consent, and tick validation into one deterministic structure:
-
-1. **TLSE-EMP** — a deterministic profile of TLS 1.3
-2. **STP** — a DNS-free, privacy-preserving transport for sovereign and offline-capable deployments
-
-Both transports MUST provide:
-
-* exporter-bound identity
-* deterministic framing
-* downgrade resistance
-* replay resistance
-* canonical session binding
-
----
-
-## **7.1 TLSE-EMP (Deterministic TLS)**
-
-TLSE-EMP MUST be supported by PQSF implementations.
-It provides:
-
-* hybrid post-quantum + classical key agreement
-* deterministic transcript hashing
-* exporter-bound session identity
-* in-band replay protection
-* downgrade attack prevention
-
-PQSF does **not** modify TLS wire format; TLSE-EMP is a profile applied to existing TLS libraries.
-
----
-
-## **7.2 Exporter Hash Derivation (NORMATIVE)**
-
-PQSF uses the TLS 1.3 exporter defined in RFC 8446 to produce an exporter-bound session identity.
-
-The exporter MUST be invoked as:
-
-```
-exporter_hash = TLS-Exporter("PQSF-EXPORTER", context, 32)
-```
-
-Where:
-
-* label = `"PQSF-EXPORTER"`
-* output length = **32 bytes**
-* `context` = canonical CBOR or JCS JSON of:
-
-```
-{
-  "pqsf_version": "1.0.0",
-  "session_id": tstr
+EmergencyProfile = {
+  profile: CryptoSuiteProfile,
+  replaces_profile_id: tstr,
+  compromise_evidence_hash: bstr,
+  emergency_justification: tstr,
+  transition_deadline_tick: uint,
+  governance_sigs: [* {
+    signer_id: tstr,
+    sig: bstr
+  }]
 }
 ```
 
-**Rules:**
+#### 8.5.2 Transition Period
 
-* session_id MUST be identical on both endpoints
-* canonical encoding MUST be identical across implementations
-* exporter_hash MUST be embedded in all session-bound PQSF objects
-* mismatch MUST cause fail-closed (`E_EXPORTER_MISMATCH`)
+Emergency transitions follow a phased approach:
 
-### Pseudocode (Informative) — Exporter Hash Helper
+1. **Phase 1: Dual-Algorithm Mode (Days 0-7)**
+   * Accept both old (compromised) and new algorithms
+   * Log all uses of old algorithm
+   * Warn users about pending deprecation
 
-```pseudo
-function pqsf_derive_exporter_hash(tls_session, session_id):
-    ctx = {
-        pqsf_version: "1.0.0",
-        session_id:   session_id
-    }
-    ctx_bytes = pqsf_canonical_encode(ctx)
-    return tls_exporter(tls_session, "PQSF-EXPORTER", ctx_bytes, 32)
+2. **Phase 2: Authoritative Restriction (Days 7-30)**
+   * Reject old algorithm for Authoritative operations
+   * Continue accepting for Non-Authoritative operations
+   * Escalate user warnings
 
-function pqsf_check_exporter_binding(object_exporter_hash, session_exporter_hash):
-    return (object_exporter_hash == session_exporter_hash)
+3. **Phase 3: Complete Deprecation (Day 30+)**
+   * Reject old algorithm for all operations
+   * Remove old algorithm support from codebase
+
+#### 8.5.3 Rollback Protection
+
+To prevent reactivation of compromised profiles:
+
+1. Compromised profiles MUST be added to rollback_denylist immediately.
+2. Profiles in rollback_denylist CANNOT be reactivated even with valid signatures.
+3. rollback_denylist MUST be signed by emergency_quorum.
+4. rollback_denylist additions are permanent and cannot be removed.
+
+### 8.6 Profile Compatibility and Version Negotiation
+
+#### 8.6.1 Compatibility Rules
+
+When evaluating profile updates, implementations MUST apply these compatibility rules:
+
+**Signature Algorithm Families:**
+* ML-DSA-65 → ML-DSA-87: PERMITTED (stronger)
+* ML-DSA-87 → ML-DSA-65: FORBIDDEN (downgrade)
+* ML-DSA-* → ECDSA: FORBIDDEN (quantum-vulnerable)
+* ECDSA → ML-DSA-*: PERMITTED (upgrade to PQ)
+
+**Hash Algorithm Families:**
+* SHAKE256-256 → SHAKE256-512: PERMITTED (stronger)
+* SHAKE256-512 → SHAKE256-256: FORBIDDEN (downgrade)
+* SHAKE256-* → SHA256: FORBIDDEN (quantum concerns)
+* SHA256 → SHAKE256-*: PERMITTED (upgrade to PQ)
+
+**KEM Algorithm Families:**
+* ML-KEM-768 → ML-KEM-1024: PERMITTED (stronger)
+* ML-KEM-1024 → ML-KEM-768: FORBIDDEN (downgrade)
+* ECDH → ML-KEM-*: PERMITTED (upgrade to PQ)
+* ML-KEM-* → ECDH: FORBIDDEN (quantum-vulnerable)
+
+#### 8.6.2 Mixed-Version Operation
+
+During transition periods:
+
+1. Implementations MUST support reading both old and new profile formats.
+2. Implementations MUST write using the newest acceptable profile.
+3. Verification MUST accept any non-revoked profile within valid_from_tick/valid_until_tick window.
+4. If multiple valid profiles exist, prefer the profile with the latest valid_from_tick.
+
+---
+
+### 8.6.3 Decentralized Governance Protocol
+
+#### 8.6.3.1 Governance Model
+
+CryptoSuiteProfile updates MUST be governed by a distributed threshold
+signature scheme to prevent single-authority compromise.
+
 ```
 
----
-
-## **7.3 Downgrade Resistance**
-
-If negotiation results in classical-only cipher suites:
-
-* PQSF MUST fail-closed **unless** the deployment explicitly allows transitional compatibility,
-* and child specifications permit classical fallback.
-
-This ensures PQSF-bound applications cannot silently downgrade.
-
----
-
-## **7.4 STP — Sovereign Transport Protocol**
-
-STP is a minimal, canonical, deterministic transport for offline/sovereign environments.
-
-STP MUST support:
-
-* operation without DNS
-* exporter-bound replay protection
-* deterministic framing rules
-* minimal external dependency
-* single-round-trip establishment
-
-STP MUST be used in:
-
-* privacy/stealth-granularity modes
-* sovereign deployments
-* offline-to-online transitions
-* PQAI, PQHD, PQVL transport layers
-
-**Normative STP examples** appear in **Annex C.10**.
-
----
-
-## **7.5 Transport Fail-Closed**
-
-Transport MUST fail-closed if:
-
-* exporter mismatch
-* tick invalid or stale
-* canonicalisation fails
-* downgrade detected
-* replay detected
-
-PQSF MUST NOT accept any session-bound object unless the transport session is fully validated.
-
----
-
-# **7.6 Encrypted-Before-Transport (EBT) Requirement (NORMATIVE)**
-
-The PQ Ecosystem follows a universal **Encrypted-Before-Transport (EBT)** rule:
-all sensitive artefacts MUST be encrypted locally **before** they are transmitted over any transport channel, including TLSE-EMP, STP, offline transfer media, or cloud-storage endpoints. This rule ensures that hosts, intermediaries, mirrors, coordinators, cloud services, and network operators are cryptographically unable to inspect plaintext content.
-
-EBT is a foundational privacy and sovereignty guarantee across the ecosystem.
-
-## **7.6.1 Scope of EBT**
-
-The following PQSF-bound artefacts MUST be encrypted locally before transmission:
-
-1. **Secure AI Prompting payloads**
-   (PQAI SafePrompt, prompt content, model-bound data)
-   Encryption MUST use ML-KEM-1024 or AES-256-GCM/XChaCha20-Poly1305 under a key derived via PQSF deterministic derivation (§3.2).
-
-2. **KeyMail messages**
-   (Annex L in PQHD; §9 in PQSF)
-   All KeyMailEnvelope content MUST be AEAD-encrypted prior to OOB transport.
-
-3. **Recovery Capsules**
-   (PQSF Annex D; PQHD §10)
-   Capsule `encrypted_material` MUST be encrypted with ML-KEM-1024 using deterministic, canonical inputs. Capsules MUST never be transmitted in plaintext.
-
-4. **Continuity Capsules / Ledger Bundles**
-   (PQSF §8, Annex D)
-   Exported ledger bundles MUST be encrypted locally before upload, cloud storage, or cross-device transport.
-
-5. **Cloud-stored application artefacts**
-   Any PQSF-compliant system using cloud transport or cloud storage MUST encrypt artefacts locally before uploading. Cloud hosts MUST NOT have access to any unencrypted PQSF, PQHD, PQAI, or PQVL state.
-
-6. **Identity, KYC, and delegated credentials**
-   (PQHD Annexes N–Q, PQAI §7)
-   All credential objects MUST be encrypted before transport or remote storage.
-
-7. **STP sovereign transport payloads**
-   (PQSF §7.4)
-   STP frames MUST NOT contain plaintext sensitive content. Payloads MUST be encrypted prior to STP encapsulation.
-
-8. **Export/Import flows**
-   (PQHD Secure Import, PQSF Annexes)
-   All migration envelopes, authority objects, or exported secrets MUST be encrypted at the application boundary, before transmission.
-
-## **7.6.2 Encryption Requirements**
-
-All EBT encryption MUST satisfy:
-
-* **Canonical input encoding**:
-  Inputs to encryption MUST be canonicalised using deterministic CBOR or JCS JSON.
-
-* **Post-quantum authenticated encryption**:
-  Implementations MUST use one of:
-  – **ML-KEM-1024** (for hybrid or KEM-sealed objects)
-  – **AES-256-GCM** or **XChaCha20-Poly1305** (for symmetric AEAD)
-  Keys MUST be derived using §3.2 (cSHAKE256 domain-separated deterministic derivation).
-
-* **Exporter-bound semantics**:
-  When EBT-protected items are sent during PQSF sessions, their encryption contexts MUST bind to the active exporter_hash to prevent cross-session replay or misuse.
-
-* **Tick-bound validity**:
-  EBT-protected items MUST embed or accompany a fresh EpochTick (§4).
-  Stale ticks MUST render the decrypted content invalid.
-
-### Pseudocode (Informative) — EBT Encryption Helper
-
-```pseudo
-function pqsf_encrypt_before_transport(label, plaintext_obj, ctx):
-    // 1. Canonicalise inputs
-    payload_bytes = pqsf_canonical_encode(plaintext_obj)
-
-    // 2. Derive key via cSHAKE256
-    key_context = {
-        label:          label,
-        exporter_hash:  ctx.exporter_hash,
-        tick:           ctx.tick.t
-    }
-    key = pqsf_derive_secret(ctx.root_seed, "EBT-" + label, key_context)
-
-    // 3. AEAD encrypt
-    nonce = random_nonce()  // or deterministic per deployment rules
-    aad   = pqsf_canonical_encode({ tick: ctx.tick, label: label })
-    ciphertext, tag = aead_encrypt(key, nonce, payload_bytes, aad)
-
-    return {
-        ciphertext: ciphertext,
-        nonce:      nonce,
-        tag:        tag,
-        tick:       ctx.tick
-    }
-```
-
-## **7.6.3 Host Visibility Requirements**
-
-Under EBT:
-
-* Cloud hosts, coordinators, mirrors, transport intermediaries, and service operators MUST NOT be able to view plaintext PQSF artefacts.
-* Only canonical ciphertext MUST appear in storage environments outside the user’s device.
-* Hosts MAY observe encrypted binary blobs; they MUST NOT observe:
-  – plaintext prompts,
-  – credentials,
-  – capsules,
-  – PSBT-related data,
-  – ledger bundles,
-  – recovery material,
-  – delegated identity/payment objects.
-
-This ensures cloud-assisted workflows remain **sovereign**, **private**, and **independent of host trust**.
-
-## **7.6.4 Error Handling (NORMATIVE)**
-
-If an implementation attempts to transmit any EBT-scoped artefact in plaintext:
-
-```
-E_TRANSPORT_UNENCRYPTED
-```
-
-MUST be raised.
-
-Any such event MUST:
-
-* fail-closed the operation,
-* freeze all dependent signing or AI actions,
-* invalidate the current session,
-* require a fresh tick,
-* require PQVL re-attestation (for PQHD/PQAI consumers).
-
-### Pseudocode (Informative) — EBT Enforcement
-
-```pseudo
-function pqsf_send_sensitive_artefact(obj, ctx):
-    if obj.is_plaintext:
-        return error("E_TRANSPORT_UNENCRYPTED")
-
-    if not obj.is_ebt_encrypted:
-        return error("E_TRANSPORT_UNENCRYPTED")
-
-    // only now may transport send ciphertext
-    ctx.session.send(obj.ciphertext)
-    return ok()
-```
-
-## **7.6.5 Interaction With TLSE-EMP**
-
-TLSE-EMP provides deterministic transport security (§7.1).
-EBT is **additional** and MUST NOT be replaced by TLSE-EMP encryption.
-
-* TLSE-EMP protects sessions.
-* EBT protects artefacts **before** sessions exist.
-
-Both protections MUST be applied.
-
-## **7.6.6 Offline, Air-Gapped & Stealth Mode**
-
-EBT MUST apply identically in:
-
-* offline environments,
-* QR/USB/serial transfer workflows,
-* STP-only Stealth Mode.
-
-In all cases:
-
-* encrypted payloads MUST be used,
-* plaintext handling MUST NOT occur at any transport boundary.
-
----
-
-### **7.7 Epoch Tick Mirror Consensus (NORMATIVE)**
-
-Clients MUST validate EpochTicks against multiple independent mirror sources.
-An EpochTick is considered valid only if **N-of-M identical, signature-valid ticks** are observed, where **N ≥ 2**.
-
-Validation requirements:
-
-* Each candidate EpochTick MUST:
-
-  * be canonically encoded;
-  * reference the correct pinned `profile_ref`;
-  * carry a valid ML-DSA-65 signature;
-  * satisfy freshness and monotonicity rules defined by this specification.
-
-* Ticks obtained from different mirrors MUST be **byte-for-byte identical** after canonical encoding.
-
-If fewer than N identical valid ticks are observed, or if any disagreement exists between otherwise valid ticks, the client MUST:
-
-```
-valid_tick = false
-```
-
-and MUST immediately fail-closed.
-
-Mirror availability, latency, transport errors, or mirror identity are **non-authoritative** and MUST NOT relax this requirement.
-
----
-
-### **7.8 Hardware Acceleration (OPTIONAL, INFORMATIVE)**
-
-Implementations MAY offload selected operations to hardware-backed mechanisms such as Hardware Security Modules (HSMs), Trusted Execution Environments (TEEs), or equivalent secure elements.
-
-Permitted offload targets MAY include, but are not limited to:
-
-* attestation probe execution;
-* post-quantum signing operations;
-* secure key storage.
-
-Hardware acceleration:
-
-* MUST NOT alter predicate semantics;
-* MUST NOT weaken, bypass, or shortcut verification requirements;
-* MUST preserve canonical encoding, deterministic evaluation, and fail-closed behaviour.
-
-Absence of hardware acceleration MUST NOT reduce conformance, security guarantees, or compliance with any normative requirement of this specification.
-
----
-
-### **7.9 Operational Semantics and Cross-Spec Enforcement (NORMATIVE)**
-
-All dependent specifications (including, but not limited to, **PQHD**, **PQVL**, and **PQAI**) MUST adhere to the operational semantics defined in this section.
-
-These rules constitute the mandatory framework for deterministic failure containment, authority enforcement, and custody safety across the PQ ecosystem.
-
----
-
-#### **7.9.1 Fail-Closed Policy (NORMATIVE)**
-
-Any failure in validation of any of the following MUST trigger immediate fail-closed behaviour:
-
-* EpochTick
-* AttestationEnvelope
-* Policy objects
-* Canonical encoding or structure validation
-
-No fallback paths, heuristic recovery, best-effort modes, degraded operation, or silent continuation are permitted.
-
-If validation cannot be completed unambiguously, the operation MUST be denied.
-
----
-
-#### **7.9.2 Deterministic Lockout and Backoff (NORMATIVE)**
-
-Repeated failures of critical validation routines MUST trigger a deterministic lockout state:
-
-```
-FAIL_CLOSED_LOCKED
-```
-
-* The default failure threshold **K = 3**, unless a stricter value is defined by the calling specification.
-* Only failures of **authoritative validation routines** (e.g., EpochTick validation, AttestationEnvelope validation, canonical verification) count toward K.
-* Transport errors, mirror unavailability, API failures, or network conditions MUST NOT increment failure counters.
-
-While in `FAIL_CLOSED_LOCKED`:
-
-* the system MUST suppress retries for **Authoritative** operations;
-* the system MUST NOT reuse cached artefacts, AttestationLeases, or prior validation results to re-attempt execution.
-
-Exit from `FAIL_CLOSED_LOCKED` MUST occur **only** after successful validation of **both**:
-
-* a fresh EpochTick satisfying the calling specification’s freshness and monotonicity requirements; and
-* a fresh AttestationEnvelope satisfying the calling specification’s runtime integrity requirements.
-
-Automatic retries, delayed retries, or operator-forced overrides are forbidden.
-
----
-
-#### **7.9.3 Canonical Primitive Usage (NORMATIVE)**
-
-Application and protocol layers MUST consume **only** cryptographically verified primitives.
-
-Specifically:
-
-* EpochTick and AttestationEnvelope objects MUST be fully verified before use.
-* Retrieval failures, mirror reachability, transport-layer errors, discovery failures, or API errors are **non-authoritative**.
-* Non-authoritative errors MUST NOT:
-
-  * influence predicate outcomes;
-  * affect authority decisions;
-  * increment deterministic failure counters.
-
-Authority is derived solely from verified canonical artefacts.
-
----
-
-#### **7.9.4 Operational Authority Partitioning (NORMATIVE)**
-
-All operations MUST be explicitly classified as either **Authoritative** or **Non-Authoritative**.
-
-**Authoritative operations** include operations that:
-
-* require full, fresh attestation; and
-* cause irreversible external effects or custody state mutation.
-
-Authoritative operations include, but are not limited to:
-
-* signing;
-* recovery activation;
-* policy creation, modification, or rotation;
-* quorum creation, mutation, or satisfaction;
-* ledger mutation or reconciliation;
-* custody state transitions.
-
-**Non-Authoritative operations** include operations that:
-
-* cause no irreversible external effects; and
-* do not mutate custody or authority state.
-
-Non-Authoritative operations include, but are not limited to:
-
-* read-only queries;
-* lookups and inspection;
-* dry-run validation;
-* UI rendering and status display.
-
-Rules:
-
-* Authoritative operations MUST NOT be executed under an AttestationLease.
-* Non-Authoritative operations MAY consume an AttestationLease when permitted by the calling specification.
-* Misclassification of an Authoritative operation as Non-Authoritative constitutes a conformance violation.
-
-These partitioning rules are mandatory and MUST be enforced consistently across all dependent specifications.
-
----
-
-# **8. LEDGER (NORMATIVE)**
-
-PQSF defines a deterministic append-only ledger for recording critical security events.
-This ledger supports:
-
-* policy integrity
-* time-bound signing flows
-* runtime verification
-* consent events
-* profile changes
-* delegated identity/payment events
-* erasure proofs
-
-The ledger MUST be consistent across implementations.
-
----
-
-## **8.1 Ledger Entry Structure**
-
-```
-LedgerEntry = {
-  "event": tstr,
-  "tick": uint,
-  "payload": { * tstr => any },
-  "signature_pq": bstr,
-  "prev_hash": bstr
+GovernanceConfig = {
+governance_id: tstr,
+governance_members: [* GovernanceMember],
+threshold_m: uint,
+total_n: uint,
+valid_from_tick: uint,
+governance_policy_hash: bstr,
+signature: bstr
 }
+
+GovernanceMember = {
+member_id: tstr,
+public_key_pq: bstr,
+organization: tstr,
+role: "proposer" / "approver" / "auditor",
+added_at_tick: uint,
+valid_until_tick: uint / null
+}
+
 ```
 
-### Requirements:
+**Requirements:**
+1. `threshold_m` MUST be ≥ ⌈(total_n / 2)⌉ + 1.
+2. Governance members MUST represent at least three independent organizations.
+3. GovernanceConfig MUST be signed by the active governance threshold or bootstrap authority.
+4. Governance metadata defines legitimacy only and carries no enforcement authority.
 
-* MUST be canonicalised
-* MUST be hashed deterministically
-* MUST chain to previous entry
-* MUST be signed with ML-DSA-65
-* MUST use SHAKE256-256
+#### 8.6.3.2 Profile Update Proposal Workflow
 
-### Pseudocode (Informative) — Ledger Entry Builder
+Profile updates MUST follow a propose-approve-activate lifecycle.
 
-```pseudo
-function pqsf_build_ledger_entry(event, tick, payload, prev_hash):
-    entry = {
-        event:        event,
-        tick:         tick.t,
-        payload:      payload,
-        prev_hash:    prev_hash
-    }
-    entry_bytes = pqsf_canonical_encode(entry)
-    entry.signature_pq = ml_dsa_65_sign(ledger_sk, entry_bytes)
-    return entry
 ```
+
+ProfileUpdateProposal = {
+proposal_id: tstr,
+proposed_profile: CryptoSuiteProfile,
+replaces_profile_id: tstr / null,
+rationale: tstr,
+proposer_id: tstr,
+proposed_at_tick: uint,
+approval_deadline_tick: uint,
+approvals: [* GovernanceApproval],
+proposal_hash: bstr,
+signature: bstr
+}
+
+GovernanceApproval = {
+member_id: tstr,
+approved_at_tick: uint,
+signature: bstr
+}
+
+```
+
+Activation MUST NOT occur unless the required threshold approvals are
+received before `approval_deadline_tick`.
+
+#### 8.6.3.3 Authority Boundary
+
+Governance artefacts define update legitimacy only.
+All acceptance, refusal, revocation, and enforcement semantics are
+defined exclusively by consuming specifications.
 
 ---
 
-## **8.2 Merkle Construction**
+## 9. Hashing Interface
 
-PQSF uses a deterministic Merkle tree:
-
-* leaf prefix = `0x00`
-* internal node prefix = `0x01`
-* hash function = SHAKE256-256
-
-Leaf construction:
-
-```
-leaf = SHAKE256-256(0x00 || canonical(entry))
-```
-
-Node construction:
-
-```
-node = SHAKE256-256(0x01 || left || right)
-```
-
-The Merkle root MUST be identical across implementations for identical sequences.
-
-### Pseudocode (Informative) — Merkle Root Calculation
-
-```pseudo
-function pqsf_merkle_root(entries):
-    if len(entries) == 0:
-        return zero32()
-
-    leaves = []
-    for entry in entries:
-        bytes  = pqsf_canonical_encode(entry)
-        leaf   = shake256_256(0x00 || bytes)
-        leaves.append(leaf)
-
-    nodes = leaves
-    while len(nodes) > 1:
-        next_level = []
-        for i in range(0, len(nodes), 2):
-            left = nodes[i]
-            if i + 1 < len(nodes):
-                right = nodes[i + 1]
-            else:
-                right = left  // duplicate last leaf if odd length
-            node = shake256_256(0x01 || left || right)
-            next_level.append(node)
-        nodes = next_level
-
-    return nodes[0]
-```
+1. Hashing operations MUST reference a hash-class CryptoSuiteProfile.
+2. For PQSF-native objects, hash inputs MUST be canonical CBOR bytes.
+3. For Epoch Clock artefacts, hash inputs MUST be the JCS Canonical JSON bytes of the artefact.
+4. Digest length and algorithm behaviour are defined exclusively by the referenced profile.
+5. Implementations MUST NOT vary digest length or parameters outside the profile definition.
 
 ---
 
-## **8.3 Monotonic Ordering**
+## 10. Signature Interface
 
-Ledger entries MUST be ordered strictly by tick:
+1. Signature operations MUST reference a signature-class CryptoSuiteProfile.
+2. For PQSF-native objects, signature input MUST be the canonical CBOR encoding of the payload with signature fields omitted.
+3. Signature verification MUST reconstruct the canonical payload deterministically.
+4. Classical signatures MAY appear only where explicitly permitted by a consuming specification and carry no authority semantics within PQSF.
+5. Epoch Clock signature verification is external and is defined by the Epoch Clock specification. PQSF MUST NOT redefine Epoch Clock signature inputs.
+
+---
+
+## 11. Domain Separation
+
+1. All cryptographic operations over PQSF-native objects MUST apply explicit domain separation.
+2. Domain separation identifiers are defined by the domain_set_id referenced in the CryptoSuiteProfile.
+3. Domain separation identifiers MUST NOT be altered by implementations.
+
+Epoch Clock domain separation and signature inputs are defined by Epoch Clock and are not modified by PQSF.
+
+---
+
+## 12. Deterministic Derivation
+
+1. Deterministic key and secret derivation MUST reference a derivation-class CryptoSuiteProfile.
+2. Derivation inputs MUST be canonically encoded.
+3. Derivation MUST be deterministic and reproducible across platforms.
+
+---
+
+## 13. Universal Secret Derivation
+
+PQSF supports deterministic derivation of domain-scoped secrets for various cryptographic purposes.
+
+### 13.1 Derivation Formula
 
 ```
-tick_new > tick_previous
+Secret = cSHAKE256(
+  root_seed,
+  domain = "PQSF-Secret:<context>",
+  input  = canonical(context_parameters)
+)
 ```
 
-Violation MUST freeze the ledger until reconciliation.
+### 13.2 Requirements
+
+1. Secrets MUST be deterministic given identical inputs.
+2. Secrets MUST be unlinkable across domains via domain separation.
+3. context_parameters MUST be canonically encoded.
+4. Root seed MUST have at least 256 bits of entropy.
+
+### 13.3 Standard Context Strings
+
+The following context strings are reserved for standard uses:
+
+* `"PQSF-Secret:SessionKey"` - For session establishment and key agreement
+* `"PQSF-Secret:RecoveryShare"` - For recovery material generation
+* `"PQSF-Secret:EBTWrap"` - For EBT key derivation
+* `"PQSF-Secret:SigningKey"` - For ephemeral signing key derivation
+* `"PQSF-Secret:AuthToken"` - For authentication token generation
+
+Implementations MAY define additional context strings using the `"PQSF-Secret:"` prefix.
 
 ---
 
-## **8.4 Reconciliation**
+## 14. Epoch Clock Integration Objects
 
-Reconciliation MUST:
+PQSF does not redefine Epoch Clock profiles or ticks as PQSF-native objects.
 
-* accept the ledger with the highest tick
-* verify `prev_hash` chain
-* verify ML-DSA-65 signatures
-* verify Merkle root
-* reject divergent histories
-
-If divergence cannot be reconciled automatically, the deployment MAY define canonicalisation rules outside PQSF.
-
-### Pseudocode (Informative) — Ledger Append + Consistency
-
-```pseudo
-function pqsf_append_ledger_event(ledger, event, tick, payload):
-    last_entry = ledger.last()
-    if last_entry != null and tick.t <= last_entry.tick:
-        return error("E_LEDGER_INVALID")
-
-    prev_hash = last_entry.hash if last_entry != null else zero32()
-    entry = pqsf_build_ledger_entry(event, tick, payload, prev_hash)
-
-    ledger.entries.append(entry)
-    ledger.root = pqsf_merkle_root(ledger.entries)
-    return ok()
-```
-
----
-
-## **8.5 Required Ledger Events**
-
-The following events MUST be supported:
-
-* `consent_issued`
-* `consent_expired`
-* `policy_rotated`
-* `runtime_attested`
-* `runtime_drift_critical`
-* `tick_validated`
-* `profile_rotated`
-* `transport_restarted`
-
-Additional events are defined by annexes (payments, identity, erasure, etc.).
-
----
-
-## **8.6 Fail-Closed Ledger Behaviour**
-
-If any ledger entry is invalid:
-
-* ledger MUST freeze
-* system MUST fetch a fresh tick
-* runtime MUST re-attest
-* reconciliation MUST occur
-
-Child specifications MUST NOT override this rule.
-
----
-
-# **9. OUT-OF-BAND CHANNELS — KEYMAIL (OPTIONAL, NORMATIVE)**
-
-KeyMail is an optional PQSF extension for high-risk, out-of-band (OOB) confirmations.
-It is not required for wallets or PQHD but MAY be enabled by policy.
-
-KeyMail provides:
-
-* independent confirmation channel
-* resistance against UI spoofing
-* additional control for high-value or sensitive actions
-* support for delegated authority flows
-
-If KeyMail is disabled, PQSF implementations MAY omit all KeyMail flows.
-
----
-
-## **9.1 KeyMail Overview (Optional)**
-
-KeyMail MAY be enabled for:
-
-* Secure Import
-* delegated-key changes
-* recovery activation
-* high-value actions
-* identity delegation
-* payment delegation
-
-Deployments choose whether to enable or disable KeyMail.
-
----
-
-## **9.2 KeyMail Keypairs and Revocation**
-
-KeyMail uses ML-DSA-65 signatures.
-KeyMail keypairs MUST support:
-
-* rotation under local implementation policy
-* deterministic derivation (cSHAKE256)
-* tick-bound activation
-* revocation with DEAD-KEY semantics
-* ledger logging
-* immediate invalidation of pending KeyMail confirmations upon revocation
-
-A revoked KeyMail key MUST NOT validate future confirmations.
-
----
-
-## **9.3 Message Structure and Binding**
-
-A KeyMail confirmation MUST include:
+### 14.1 EpochClockProfileBytes
 
 ```
-KeyMailMessage = {
-  "km_id": tstr,
-  "consent_ref": tstr,
-  "action": tstr,
-  "content_hash": bstr,
-  "tick": EpochTick,
-  "exporter_hash": bstr,
-  "signature_pq": bstr
+EpochClockProfileBytes = {
+  profile_ref: tstr,
+  encoding: "JCS-JSON",
+  profile_bytes: bstr
 }
 ```
 
 Requirements:
 
-* MUST be AEAD-encrypted (ML-KEM-1024 or AES-256-GCM-SIV)
-* MUST be canonicalised
-* MUST bind to active exporter_hash
-* MUST be tick-valid
-* MUST be signed with ML-DSA-65
-* MUST be logged for high-risk operations
+1. profile_bytes MUST be the exact JCS Canonical JSON bytes of the Epoch Clock profile.
+2. profile_ref MUST match the profile_ref contained in the decoded JCS JSON.
+3. Verification of the profile_bytes is defined by Epoch Clock and consuming enforcement specifications.
+4. profile_bytes MUST NOT be re-encoded.
 
-### Pseudocode (Informative) — KeyMail Creation and Validation
-
-```pseudo
-function pqsf_build_keymail_message(consent_ref, action, content_obj, tick, exporter_hash):
-    content_hash = pqsf_hash_object(content_obj)
-    msg = {
-        km_id:         generate_uuid(),
-        consent_ref:   consent_ref,
-        action:        action,
-        content_hash:  content_hash,
-        tick:          tick,
-        exporter_hash: exporter_hash
-    }
-    msg_bytes = pqsf_canonical_encode(msg)
-    msg.signature_pq = ml_dsa_65_sign(keymail_sk, msg_bytes)
-    return msg
-
-function pqsf_validate_keymail_message(msg, exporter_hash, current_tick):
-    if msg.exporter_hash != exporter_hash:
-        return (false, "E_EXPORTER_MISMATCH")
-
-    (valid_tick, err) = pqsf_validate_tick(msg.tick, pinned_profile_ref, null)
-    if not valid_tick:
-        return (false, err)
-
-    bytes = pqsf_canonical_encode({
-        km_id:         msg.km_id,
-        consent_ref:   msg.consent_ref,
-        action:        msg.action,
-        content_hash:  msg.content_hash,
-        tick:          msg.tick,
-        exporter_hash: msg.exporter_hash
-    })
-    if not ml_dsa_65_verify(keymail_pk, bytes, msg.signature_pq):
-        return (false, "E_SIGNATURE_INVALID")
-
-    return (true, null)
-```
-
----
-
-## **9.4 Security Rationale (Informative)**
-
-KeyMail produces a **second independent confirmation path**.
-An attacker must compromise both the main session and KeyMail to authorise sensitive actions.
-
-It reduces risk from:
-
-* phishing
-* UI-swapping
-* transport injection
-* coordinator manipulation
-* social-engineering attacks
-
-Optional, but highly protective when enabled.
-
----
-
-# **10. COMPLIANCE (NORMATIVE)**
-
-Compliance profiles define minimum capabilities required for interoperability across PQSF implementations.
-All PQSF-conformant systems MUST explicitly declare their compliance level.
-
----
-
-## **10.1 MVP Compliance**
-
-The **MVP** profile defines the smallest viable PQSF implementation.
-
-MVP MUST implement:
-
-* EpochTick validation (§4)
-* ConsentProof (§5)
-* exporter-bound TLSE-EMP (§7)
-* deterministic canonical encoding (§3.5)
-* SHAKE256-256 hashing
-* cSHAKE256 deterministic key derivation (§3.2)
-* minimal ledger (single-chain mode)
-
-### MVP Ledger Requirements:
-
-* append-only
-* strictly monotonic tick
-* ML-DSA-65 signatures on entries
-
-### Events required under MVP:
-
-* `tick_validated`
-* `consent_issued`
-* `consent_expired`
-* `policy_rotated`
-* `transport_restarted`
-
----
-
-## **10.2 FULL Compliance**
-
-FULL includes **all MVP requirements**, plus:
-
-* full Policy Enforcer evaluation (§6)
-* Sovereign Transport Protocol (STP) (§7.4)
-* deterministic Merkle ledger (§8)
-* ledger reconciliation rules
-* policy bundles and tick-bound policy changes
-* support for recovery capsule format (Annex D)
-
-FULL is suitable for multi-device and multi-policy deployments.
-
----
-
-## **10.3 EXTENDED Compliance**
-
-EXTENDED includes all FULL requirements, and adds integration with:
-
-* PQHD (wallet custody)
-* PQAI (AI model integrity flows)
-* PQVL (runtime verification)
-* Epoch Clock v2 lineage rules (§4.2)
-
-EXTENDED is recommended for:
-
-* high-assurance systems
-* regulated deployments
-* sovereign/offline installations
-* environments requiring runtime-state guarantees
-
----
-
-## **10.4 Compliance Manifest**
-
-A PQSF implementation SHOULD distribute a signed manifest:
+### 14.2 EpochClockTickBytes
 
 ```
-{
-  "implementation": tstr,
-  "version": tstr,
-  "compliance": "MVP" | "FULL" | "EXTENDED",
-  "tick": uint,
-  "signature_pq": bstr
-}
-```
-
-Signature MUST be ML-DSA-65 and verifiable based on public key material distributed by the implementation.
-
-### Pseudocode (Informative) — Compliance Manifest Issuance
-
-```pseudo
-function pqsf_build_compliance_manifest(impl_name, version, level, tick):
-    manifest = {
-        implementation: impl_name,
-        version:        version,
-        compliance:     level,
-        tick:           tick.t
-    }
-    bytes = pqsf_canonical_encode(manifest)
-    manifest.signature_pq = ml_dsa_65_sign(manifest_sk, bytes)
-    return manifest
-```
-
----
-
-## 10.5 Custody and Transactional Scope (NORMATIVE)
-
-This section defines **custody qualification tiers** for systems claiming integration with **PQHD** under PQSF. These tiers are **authoritative** and override any informal or marketing descriptions of custody strength.
-
-### **10.5.1 PQHD Custody (Baseline)**
-
-**PQHD Custody (Baseline)** is the **minimum conformance level** that qualifies a system as providing **PQHD Custody**.
-
-A system claiming **PQHD Custody (Baseline)** MUST satisfy **all** of the following requirements:
-
-1. **Multi-Device Quorum**
-
-   * A quorum of **≥2 independent signer runtimes** MUST be required for authorisation.
-   * No single device, runtime, or signer instance MAY unilaterally authorise a spend.
-
-2. **Mandatory Runtime Integrity**
-
-   * **PQVL runtime attestation** MUST be enforced prior to every signing operation.
-   * Any PQVL drift state other than `NONE` MUST cause fail-closed behaviour.
-
-3. **Canonical Transaction Validation**
-
-   * All PSBTs MUST undergo **canonical structure validation** prior to signing.
-   * Non-canonical or ambiguous transaction structures MUST be rejected.
-
-4. **Explicit Intent Enforcement**
-
-   * Every spend MUST be authorised via a valid **ConsentProof** bound to:
-
-     * the specific action,
-     * a fresh EpochTick,
-     * the active exporter_hash,
-     * deterministic canonical encoding.
-
-5. **Deterministic Policy Enforcement**
-
-   * All spends MUST be evaluated through the **Policy Enforcer** with deterministic predicates.
-   * Thresholds, limits, and constraints MUST be enforced locally and fail-closed.
-
-6. **Ledger Continuity**
-
-   * All custody-relevant events MUST be recorded in a deterministic, append-only ledger.
-   * Ledger continuity MUST be preserved across devices and sessions.
-
-A system that satisfies **PQHD Custody (Baseline)** provides the security guarantee that **no single compromised device, runtime, or signing environment can authorise a spend**.
-
----
-
-### **10.5.2 PQHD Custody (Enterprise)**
-
-**PQHD Custody (Enterprise)** builds on **PQHD Custody (Baseline)** and is intended for **institutional, regulated, or sovereign threat models**.
-
-A system claiming **PQHD Custody (Enterprise)** MUST satisfy **all Baseline requirements**, and additionally MUST implement:
-
-1. **Quorum Diversity Constraints**
-
-   * Quorum participants MUST be **heterogeneous** across devices, runtimes, or trust domains.
-   * Policy MUST prevent quorum satisfaction by a homogeneous failure class.
-
-2. **Guardian Participation and Deterministic Delays**
-
-   * Guardian-based approval flows MUST be supported where policy requires.
-   * Deterministic delay windows MUST be enforceable prior to high-risk actions.
-
-3. **Formal Recovery Capsules**
-
-   * Recovery MUST be mediated exclusively through **Recovery Capsules** as defined in Annex D.
-   * Recovery activation MUST be:
-
-     * tick-bound,
-     * quorum-authorised,
-     * ledger-recorded,
-     * delay-constrained.
-
-4. **Emergency Clock Governance**
-
-   * Enterprise deployments MUST define governance procedures for:
-
-     * Epoch Clock profile rotation,
-     * emergency clock pinning,
-     * incident response under temporal authority compromise.
-
-5. **Cross-Device Ledger Reconciliation**
-
-   * Deterministic reconciliation MUST be supported across devices and signers.
-   * Divergent histories MUST be detected and fail-closed until resolved.
-
-6. **Full Auditability**
-
-   * All custody-relevant events MUST be auditable end-to-end.
-   * Ledger entries MUST support institutional compliance and post-incident review.
-
-**PQHD Custody (Enterprise)** is REQUIRED for environments that demand formal governance, auditability, and resilience against coordinated or insider threat models.
-
----
-
-### **10.5.3 Transactional Profile (Non-Custodial Profile)**
-
-The **Transactional Profile** is an explicitly **non-custodial** integration profile.
-
-A system operating under the **Transactional Profile**:
-
-* MAY implement:
-
-  * canonical encoding,
-  * ConsentProof,
-  * EpochTick usage,
-  * deterministic policy objects,
-  * PSBT canonicalisation,
-  * basic ledger continuity.
-
-* MUST be assumed to:
-
-  * operate on a **single-device** basis, and
-  * fail under **single-device runtime compromise**.
-
-The Transactional Profile:
-
-* MUST NOT claim or imply **PQHD Custody**,
-* MUST NOT be marketed as **Baseline** or **Enterprise custody**,
-* MUST NOT assert guarantees that rely on quorum, runtime integrity, or custody-grade isolation.
-
-This profile exists solely to allow **transactional correctness and determinism**, not custody security.
-
----
-
-### **10.5.4 Normative Marketing and Claim Restrictions**
-
-Any system that does **not** meet the full requirements of **PQHD Custody (Baseline)**:
-
-* MUST NOT use the terms:
-
-  * “PQHD Custody”,
-  * “quantum-secure custody”,
-  * “custodial-grade PQHD”.
-
-Misrepresentation of custody tier constitutes **non-conformance** with this specification.
-
----
-
-### **10.5.5 Relationship to PQSF Predicates**
-
-The custody tier directly constrains interpretation of PQSF predicates:
-
-* **PQHD Custody (Baseline / Enterprise)**:
-
-  * `valid_quorum` MUST be enforced.
-  * `valid_runtime` MUST be satisfied via PQVL.
-  * Ledger continuity MUST be enforced.
-
-* **Transactional Profile**:
-
-  * `valid_quorum` MAY be trivially satisfied.
-  * `valid_runtime` MAY be absent.
-  * Custody guarantees MUST NOT be claimed.
-
-PQSF predicates remain unchanged; **custody tier determines which predicates are mandatory and which guarantees may be asserted**.
-
----
-
-# **11. ERROR CODES (NORMATIVE)**
-
-PQSF defines standardised error codes for consistent implementation behaviour.
-
----
-
-## **11.1 Tick / Time Errors**
-
-```
-E_TICK_INVALID
-E_TICK_STALE
-E_TICK_ROLLBACK
-E_TICK_PROFILE_MISMATCH
-```
-
----
-
-## **11.2 Consent Errors**
-
-```
-E_CONSENT_INVALID
-E_CONSENT_EXPIRED
-E_CONSENT_EXPORTER_MISMATCH
-E_CONSENT_SIGNATURE_INVALID
-```
-
----
-
-## **11.3 Policy Errors**
-
-```
-E_POLICY_HASH_MISMATCH
-E_POLICY_CONSTRAINT_FAILED
-E_POLICY_THRESHOLD_FAILED
-```
-
----
-
-## **11.4 Transport Errors**
-
-```
-E_EXPORTER_MISMATCH
-E_TRANSPORT_DOWNGRADE
-E_TRANSPORT_REPLAY
-E_TRANSPORT_CANONICAL_FAIL
-E_TRANSPORT_UNENCRYPTED
-```
-
----
-
-## **11.5 Ledger Errors**
-
-```
-E_LEDGER_INVALID
-E_LEDGER_DIVERGED
-E_LEDGER_FROZEN
-E_LEDGER_SIGNATURE_INVALID
-```
-
----
-
-## **11.6 Integration Errors**
-
-Errors surfaced from child specs and integrated modules:
-
-```
-E_RUNTIME_INVALID            // PQVL
-E_PROFILE_INVALID            // PQAI ModelProfile
-E_FINGERPRINT_INVALID        // PQAI
-E_DEVICE_INVALID             // PQHD with PQVL
-```
-
-### Pseudocode (Informative) — Central Error Mapper
-
-```pseudo
-function pqsf_error_from_flags(flags):
-    if flags.tick_profile_mismatch:
-        return "E_TICK_PROFILE_MISMATCH"
-    if flags.tick_rollback:
-        return "E_TICK_ROLLBACK"
-    if flags.tick_stale:
-        return "E_TICK_STALE"
-    if flags.tick_invalid:
-        return "E_TICK_INVALID"
-
-    if flags.consent_sig_invalid:
-        return "E_CONSENT_SIGNATURE_INVALID"
-    if flags.consent_exporter_mismatch:
-        return "E_CONSENT_EXPORTER_MISMATCH"
-    if flags.consent_expired:
-        return "E_CONSENT_EXPIRED"
-
-    if flags.policy_hash_mismatch:
-        return "E_POLICY_HASH_MISMATCH"
-    if flags.policy_threshold_failed:
-        return "E_POLICY_THRESHOLD_FAILED"
-    if flags.policy_constraint_failed:
-        return "E_POLICY_CONSTRAINT_FAILED"
-
-    if flags.exporter_mismatch:
-        return "E_EXPORTER_MISMATCH"
-    if flags.transport_downgrade:
-        return "E_TRANSPORT_DOWNGRADE"
-    if flags.transport_replay:
-        return "E_TRANSPORT_REPLAY"
-    if flags.transport_noncanonical:
-        return "E_TRANSPORT_CANONICAL_FAIL"
-    if flags.transport_unencrypted:
-        return "E_TRANSPORT_UNENCRYPTED"
-
-    if flags.ledger_invalid:
-        return "E_LEDGER_INVALID"
-    if flags.ledger_diverged:
-        return "E_LEDGER_DIVERGED"
-    if flags.ledger_frozen:
-        return "E_LEDGER_FROZEN"
-    if flags.ledger_sig_invalid:
-        return "E_LEDGER_SIGNATURE_INVALID"
-
-    if flags.runtime_invalid:
-        return "E_RUNTIME_INVALID"
-
-    return "E_RUNTIME_INVALID"  // safe default
-```
-
----
-
-# **12. SECURITY CONSIDERATIONS (INFORMATIVE)**
-
-## **12.1 Quantum Safety**
-
-PQSF relies exclusively on PQ-safe primitives:
-
-* ML-DSA-65 signatures
-* ML-KEM (child-spec encryption)
-* SHAKE256-256 hashing
-* cSHAKE256 derivation
-
----
-
-## **12.2 Determinism**
-
-Canonical encoding eliminates:
-
-* malleability
-* cross-implementation ambiguity
-* divergent hashing
-* signature inconsistencies
-
-Determinism ensures identical verification results across all compliant implementations.
-
----
-
-## **12.3 Fail-Closed Model**
-
-Any failure of:
-
-* tick
-* consent
-* policy
-* ledger
-* runtime integrity
-
-MUST cause dependent systems to fail-closed.
-
-No silent fallback is permitted.
-
----
-
-## **12.4 No Trust in OS or Hardware**
-
-PQSF assumes the operating system and hardware environment are untrusted.
-
-Runtime integrity is validated via PQVL (if used).
-
----
-
-## **12.5 Ledger Safety**
-
-Merkle ledger rules prevent tampering, rollback, and reordering of event history.
-
----
-
-# **13. IMPLEMENTATION NOTES (INFORMATIVE)**
-
-## **13.1 Canonical Encoding Strategies**
-
-Recommended:
-
-* JCS JSON for transport
-* deterministic CBOR for storage
-
-Both MUST adhere to §3.5.
-
----
-
-## **13.2 Transport Layers**
-
-TLSE-EMP SHOULD be built atop an existing PQ-capable TLS library.
-STP SHOULD be used for sovereign/offline modes.
-
----
-
-## **13.3 Tick Sources**
-
-Systems MUST pin a single Epoch Clock profile.
-Ticks MUST come from trusted mirror sources or local indexing of the on-chain inscription tree.
-
----
-
-## **13.4 Multi-Device Environments**
-
-PQSF is multi-device-safe if:
-
-* exporter binding is enforced
-* monotonic ticks maintained
-* ledger reconciliation implemented
-
----
-
-# **14. BACKWARDS COMPATIBILITY (INFORMATIVE)**
-
-PQSF is designed for incremental adoption:
-
-* no OS changes
-* no hardware enclaves
-* no blockchain consensus changes
-* classical TLS fallback permitted only when explicitly allowed
-
-PQSF deployments MAY function:
-
-* fully offline
-* sovereign or on-premise
-* hybrid cloud environments
-* consumer/mobile platforms
-
----
-
-
-# **ANNEX A — MVP COMPLIANCE PROFILE (NORMATIVE)**
-
-The MVP profile defines the absolute minimum requirements for a PQSF-compliant implementation.
-Any implementation claiming MVP compliance MUST implement all elements of this annex.
-
----
-
-## **A.1 Required Capabilities**
-
-### **A.1.1 Temporal Authority**
-
-MVP implementations MUST:
-
-* validate EpochTicks according to Section 4
-* enforce tick freshness (≤900 seconds)
-* enforce monotonicity
-* validate profile_ref against the pinned Epoch Clock profile
-
----
-
-### **A.1.2 Intent Authority**
-
-MVP implementations MUST:
-
-* implement the ConsentProof structure (Section 5)
-* canonicalise ConsentProof using deterministic CBOR or JCS JSON
-* validate ML-DSA-65 signature
-* enforce ConsentProof exporter_hash binding
-* enforce tick_issued / tick_expiry bounds
-
----
-
-### **A.1.3 Transport Requirements**
-
-MVP implementations MUST:
-
-* implement TLSE-EMP as defined in Section 7
-* enforce exporter binding
-* detect downgrade attempts
-* enforce canonical framing rules
-
----
-
-### **A.1.4 Deterministic Encoding**
-
-MVP implementations MUST:
-
-* support deterministic CBOR or JCS JSON for all PQSF objects
-* reject non-canonical encodings
-
----
-
-### **A.1.5 Key Lifecycle**
-
-MVP implementations MUST:
-
-* support cSHAKE256 deterministic derivation
-* use domain separation strings for each key category
-
----
-
-### **A.1.6 Ledger (Minimal Mode)**
-
-MVP ledger MUST:
-
-* support a minimal single-chain ledger (no reconciliation)
-* append events strictly monotonically by tick
-* sign ledger entries with ML-DSA-65
-
----
-
-## **A.2 Minimal Event Requirements**
-
-The following events MUST be supported:
-
-* `tick_validated`
-* `consent_issued`
-* `consent_expired`
-* `policy_rotated`
-* `transport_restarted`
-
-Child specifications MAY define additional events.
-
----
-
-## **A.3 Interoperability Requirements**
-
-MVP implementations MUST:
-
-* accept canonical CBOR/JCS from other MVP-compatible implementations
-* enforce identical tick rules
-* treat exporter mismatch as fatal
-* fail closed on any signature failure
-
----
-
-# **ANNEX B — FULL & EXTENDED COMPLIANCE PROFILES (NORMATIVE)**
-
-Full and Extended profiles define additional PQSF capabilities required for multi-device, multi-policy, or high-assurance environments.
-
----
-
-## **B.1 FULL Compliance**
-
-FULL implementations MUST satisfy **all MVP requirements** plus the following.
-
----
-
-### **B.1.1 Policy Authority**
-
-FULL implementations MUST:
-
-* implement full Policy Enforcer semantics
-* enforce allowlist/denylist
-* enforce thresholds, limits, and min/max time windows
-* compute and validate policy_hash
-
----
-
-### **B.1.2 Ledger Requirements**
-
-FULL implementations MUST:
-
-* support deterministic Merkle ledger (Section 8)
-* support reconciliation rules
-* validate prev_hash chain
-* freeze the ledger on divergence
-
----
-
-### **B.1.3 Additional Transport Requirements**
-
-FULL implementations MUST:
-
-* support STP (Section 7.4)
-* implement replay detection for STP frames
-* validate canonical STP frames
-
----
-
-### **B.1.4 Profile Updates**
-
-FULL implementations MUST:
-
-* support profile selection and validation rules from Section 4.2
-* commit `policy_rotated` and `profile_rotated` events
-* enforce tick monotonicity when recording these events
-
----
-
-## **B.2 EXTENDED Compliance**
-
-EXTENDED implementations MUST satisfy **all FULL** requirements, plus stable integration with the following child specifications:
-
----
-
-### **B.2.1 PQHD — Wallet Custody (see PQHD 1.3 and 5–9)**
-
-PQHD defines the deterministic custody model consumed by PQSF’s predicates.  
-EXTENDED-profile PQSF implementations MUST support PQHD-level custody rules, including deterministic multisig, tick-bound signing windows, PSBT canonicalisation, policy enforcement, runtime-integrity gating, ledger anchoring, and threshold-based recovery workflows.
-
----
-
-### **B.2.2 PQAI — AI Behaviour Verification (see PQAI 1.3–1.6 and 5–11)**
-
-PQAI defines deterministic behavioural-verification rules for high-assurance AI operation.  
-EXTENDED-profile PQSF implementations MUST consume PQAI alignment fingerprints, drift-classification results, SafePrompt validation, model-profile checks, and tick-fresh alignment enforcement to ensure that AI-mediated actions occur only under verified, deterministic behavioural conditions.
-
----
-
-### **B.2.3 PQVL — Runtime Verification (see PQVL 5–7)**
-
-PQVL provides deterministic runtime-integrity verification consumed by PQSF transport, consent, policy, and ledger predicates.  
-EXTENDED-profile PQSF implementations MUST evaluate drift_state, mandatory probe sets, attestation freshness, canonical AttestationEnvelope structure, and exporter-bound transport semantics before considering any runtime-dependent predicate valid.
-
----
-
-### **B.2.4 Epoch Clock v2 (see Epoch Clock 1.7–1.10)**
-
-Epoch Clock v2 defines the canonical, Bitcoin-anchored temporal authority consumed by PQSF.
-EXTENDED-profile PQSF implementations MUST validate ticks under the active profile lineage, enforce monotonicity and freshness, and apply deterministic, fail-closed tick handling across consent windows, policy windows, runtime verification, and ledger events.
-
----
-
-## **B.3 Compliance Manifest Requirements**
-
-```
-ComplianceManifest = {
-  implementation: tstr,
-  version: tstr,
-  compliance: "MVP" / "FULL" / "EXTENDED",
-  tick: uint,
-  signature_pq: bstr
-}
-```
-
-Manifest MUST be signed using ML-DSA-65 under the implementation’s identity.
-
----
-
-# **ANNEX C — WORKFLOW EXAMPLES (INFORMATIVE)**
-
-This annex provides example flows to help developers integrate PQSF correctly.
-These examples are non-normative.
-
----
-
-## **C.1 Tick Validation Flow**
-
-1. Fetch tick from Epoch Clock source (see Epoch Clock 4–5).
-2. Validate ML-DSA signature.
-3. Validate profile_ref.
-4. Check monotonicity.
-5. Check freshness (≤900 seconds).
-6. Mark `valid_tick = true`.
-7. Append `tick_validated` to ledger.
-
----
-
-## **C.2 ConsentProof Validation Flow**
-
-1. Canonicalise ConsentProof.
-
-2. Verify ML-DSA signature.
-
-3. Validate exporter_hash = session exporter_hash.
-
-4. Ensure:
-
-   ```
-   tick_issued ≤ current_tick ≤ tick_expiry
-   ```
-
-5. Mark `valid_consent = true`.
-
----
-
-## **C.3 Policy Enforcer Evaluation Flow**
-
-1. Validate policy_hash.
-2. Evaluate allowlist/denylist.
-3. Evaluate thresholds.
-4. Evaluate min_delay & max_window.
-5. If all pass → `valid_policy = true`.
-
----
-
-## **C.4 TLSE-EMP Handshake Flow**
-
-1. Initiate PQ-hybrid TLS handshake.
-2. Verify deterministic transcript.
-3. Derive exporter_hash.
-4. Bind exporter_hash to ConsentProof and other PQSF structures.
-5. Begin secure session.
-
----
-
-## **C.5 STP Sovereign Mode Flow**
-
-1. Client sends STP-INIT frame.
-2. Server responds with STP-ACCEPT.
-3. Both sides derive exporter_hash.
-4. PQSF-bound operations begin.
-5. Replay attempts rejected.
-
----
-
-## **C.6 Ledger Append Flow**
-
-1. Construct new LedgerEntry.
-
-2. Compute Merkle leaf hash:
-
-   ```
-   leaf = SHAKE256-256(0x00 || canonical(entry))
-   ```
-
-3. Extend Merkle tree.
-
-4. Compute root.
-
-5. Validate prev_hash chain.
-
-6. Sign ledger entry.
-
-7. Commit entry.
-
----
-
-## **C.7 EpochTick Validation Pseudocode**
-
-```pseudo
-function validate_epoch_tick(tick, pinned_profile_ref, last_tick, now_unix):
-    if tick.profile_ref != pinned_profile_ref:
-        return (false, E_TICK_PROFILE_MISMATCH)
-
-    if !verify_ml_dsa_65(tick):
-        return (false, E_TICK_INVALID)
-
-    if last_tick != null and tick.t <= last_tick.t:
-        return (false, E_TICK_ROLLBACK)
-
-    if (now_unix - tick.t) > 900:
-        return (false, E_TICK_STALE)
-
-    return (true, null)
-```
-
----
-
-## **C.8 ConsentProof Validation Pseudocode**
-
-```pseudo
-function validate_consent(consent, session_exporter_hash, current_tick):
-
-    canonical_bytes = canonicalise(consent)
-
-    if !verify_ml_dsa_65(canonical_bytes, consent.signature_pq):
-        return (false, E_CONSENT_SIGNATURE_INVALID)
-
-    if consent.exporter_hash != session_exporter_hash:
-        return (false, E_CONSENT_EXPORTER_MISMATCH)
-
-    if consent.tick_issued > current_tick.t:
-        return (false, E_CONSENT_INVALID)
-
-    if current_tick.t > consent.tick_expiry:
-        return (false, E_CONSENT_EXPIRED)
-
-    return (true, null)
-```
-
----
-
-## **C.9 Policy Enforcer Evaluation Pseudocode**
-
-```pseudo
-function evaluate_policy_enforcer(policy, context):
-
-    canonical_policy = canonicalise(policy)
-    expected_hash = SHAKE256_256(canonical_policy)
-
-    if policy.policy_hash != expected_hash:
-        return (false, E_POLICY_HASH_MISMATCH)
-
-    if policy.allowlist is not empty:
-        if context.destination not in policy.allowlist:
-            return (false, E_POLICY_CONSTRAINT_FAILED)
-
-    if context.destination in policy.denylist:
-        return (false, E_POLICY_CONSTRAINT_FAILED)
-
-    if (context.current_tick.t - context.created_tick.t) < policy.time_rules.min_delay:
-        return (false, E_POLICY_CONSTRAINT_FAILED)
-
-    if (context.current_tick.t - context.created_tick.t) > policy.time_rules.max_window:
-        return (false, E_POLICY_CONSTRAINT_FAILED)
-
-    if not thresholds_satisfied(policy.thresholds, context):
-        return (false, E_POLICY_THRESHOLD_FAILED)
-
-    if not limits_satisfied(policy.limits, context):
-        return (false, E_POLICY_CONSTRAINT_FAILED)
-
-    return (true, null)
-```
-
----
-
-## **C.10 STP Example Flows**
-
-### **C.10.1 Basic STP Handshake**
-
-**Client → Server:**
-
-```text
-STP-INIT {
-  version: "1.0",
-  session_id: "sess-1234",
-  client_nonce: <random>,
-  client_caps: ["pqsf", "epoch", "consent"]
-}
-```
-
-**Server → Client:**
-
-```text
-STP-ACCEPT {
-  version: "1.0",
-  session_id: "sess-1234",
-  server_nonce: <random>,
-  server_caps: ["pqsf", "epoch"],
-  exporter_hash: <derived as per §7.2>
-}
-```
-
-### **C.10.2 Resumption**
-
-Client:
-
-```text
-STP-RESUME {
-  previous_session_id: "sess-1234",
-  resume_token: <opaque>,
-  client_nonce: <random>
-}
-```
-
-Server either:
-
-* resumes session and provides new exporter_hash, **or**
-* rejects and demands new STP-INIT.
-
-### **C.10.3 Replay Detection**
-
-Replayed STP-INIT or STP-ACCEPT triggers:
-
-```text
-STP-ERROR {
-  code: "E_TRANSPORT_REPLAY",
-  session_id: "sess-1234"
-}
-```
-
-PQSF MUST fail-closed.
-
----
-
-# **ANNEX D — RECOVERY CAPSULES (NORMATIVE)**
-
-Recovery capsules define deterministic, verifiable objects used for **disaster recovery**, **controlled restoration**, and **authorised rollback** under the constraints of PQSF security primitives.
-
-PQSF itself does **not** define how these capsules are used at the application layer; PQHD and other child specifications specialise these structures.
-
----
-
-## **D.1 Recovery Capsule Structure**
-
-A RecoveryCapsule MUST have the following structure:
-
-```text
-RecoveryCapsule = {
-  "capsule_id": tstr,
-  "guardian_set": [* tstr],
-  "threshold": uint,
-  "encrypted_material": bstr,
-  "capsule_hash": bstr,
-  "creation_tick": uint,
-  "valid_from_tick": uint,
-  "recovery_delay": uint,
-  "signature_pq": bstr
-}
-```
-
-### Normative Requirements:
-
-* `capsule_hash` MUST equal:
-
-  ```text
-  SHAKE256-256(canonical(capsule))
-  ```
-
-  where `canonical(capsule)` is computed over the capsule with `capsule_hash` and `signature_pq` omitted.
-
-* Capsule MUST be ML-DSA-65 signed.
-
-* Activation MUST NOT occur before `valid_from_tick`.
-
-* Guardians MUST satisfy the threshold signature rules defined by the consuming specification.
-
-* `encrypted_material` MUST be treated as opaque at the PQSF layer. It MAY contain:
-
-  * backup secrets
-  * encrypted account metadata
-  * recovery key material
-  * ledger anchor checkpoints
-
-PQSF does **not** define the semantics of `encrypted_material`; consuming specs (for example PQHD) MUST define:
-
-* the internal format of `encrypted_material`,
-* the AEAD/KEM scheme used to protect it,
-* who is allowed to decrypt it under which conditions.
-
----
-
-## **D.2 Recovery Activation Flow**
-
-A RecoveryCapsule is activated using the following flow:
-
-1. Verify ML-DSA signature on the capsule.
-
-2. Verify `capsule_hash` against the canonicalised capsule body.
-
-3. Verify that guardian approvals meet the `threshold` requirement.
-
-4. Validate that:
-
-   ```text
-   current_tick ≥ valid_from_tick
-   ```
-
-5. Validate that the required `recovery_delay` window has elapsed since `creation_tick` (as defined by the consuming spec).
-
-6. Decrypt `encrypted_material` according to the child specification’s rules.
-
-7. Commit a `recovery_activated` ledger entry that includes `capsule_id` and any relevant metadata.
-
-PQSF requires that all recovery activation MUST be:
-
-* tick-bound,
-* canonical, and
-* ledger-recorded.
-
-PQSF does not define what systems do *after* recovery is activated. That is the responsibility of the consuming specification (for example, PQHD may restore a wallet state; an AI system might restore alignment profiles).
-
----
-
-### **Pseudocode (Informative) — Recovery Capsule Activation**
-
-```pseudo
-function pqsf_activate_recovery_capsule(capsule, guardian_sigs, current_tick):
-    // 1. Verify signature and hash
-
-    // Build a hashable view of the capsule with capsule_hash + signature stripped
-    tmp = clone(capsule)
-    tmp.capsule_hash = null
-    tmp.signature_pq = null
-
-    expected_hash = pqsf_hash_object(tmp)
-    if capsule.capsule_hash != expected_hash:
-        return error("E_LEDGER_INVALID")
-
-    // Verify ML-DSA-65 signature over canonical capsule body
-    if not pqsf_verify_pq(recovery_pk, tmp, capsule.signature_pq):
-        return error("E_SIGNATURE_INVALID")
-
-    // 2. Guardian threshold (child spec defines guardian_set semantics)
-    if not guardian_threshold_satisfied(
-        capsule.guardian_set,
-        guardian_sigs,
-        capsule.threshold
-    ):
-        return error("E_POLICY_THRESHOLD_FAILED")
-
-    // 3. Time checks (all tick values are EpochClock ticks, not local time)
-    if current_tick.t < capsule.valid_from_tick:
-        return error("E_POLICY_CONSTRAINT_FAILED")
-
-    // Enforce a minimum delay from creation to activation
-    if current_tick.t < capsule.creation_tick + capsule.recovery_delay:
-        return error("E_POLICY_CONSTRAINT_FAILED")
-
-    // 4. Decrypt encrypted_material (child spec defines exact scheme and contents)
-    decrypted = decrypt_capsule_material(capsule.encrypted_material)
-
-    // 5. Ledger record
-    pqsf_append_ledger_event(
-        global_ledger,
-        "recovery_activated",
-        current_tick,
-        { capsule_id: capsule.capsule_id }
-    )
-
-    // 6. Hand decrypted payload back to consuming spec for domain-specific handling
-    return decrypted
-```
-
-This pseudocode is **informative only**. It illustrates:
-
-* how to canonicalise and hash the capsule body,
-* how to validate ML-DSA-65 signatures,
-* how to enforce guardian threshold and time-based constraints,
-* how to record a `recovery_activated` ledger event.
-
-Consuming specifications MUST define:
-
-* the structure and meaning of `guardian_sigs`,
-* the exact guardian threshold semantics,
-* the AEAD/KEM mechanism used in `decrypt_capsule_material`,
-* what is done with `decrypted` after activation.
-
----
-
-# **ANNEX E — CDDL DEFINITIONS (INFORMATIVE)**
-
-This annex provides machine-readable CDDL definitions for PQSF object types.
-These definitions assist with automated validation, schema checking, and code generation.
-
-Normative rules remain in the main specification.
-
----
-
-## **E.1 EpochTick**
-
-```cddl
-EpochTick = {
-  t: uint,
+EpochClockTickBytes = {
   profile_ref: tstr,
-  alg: tstr,        ; MUST be "ML-DSA-65"
-  sig: bstr
+  encoding: "JCS-JSON",
+  tick_bytes: bstr
 }
 ```
 
+Requirements:
+
+1. tick_bytes MUST be the exact JCS Canonical JSON bytes of the Epoch Clock tick.
+2. profile_ref MUST match the profile_ref contained in the decoded JCS JSON.
+3. Verification of the tick_bytes is defined by Epoch Clock and consuming enforcement specifications.
+4. tick_bytes MUST NOT be re-encoded.
+
+### 14.3 Binding Rule
+
+Any PQSF-native object that binds to time MUST bind to one of:
+
+* the hash of tick_bytes under a referenced hash profile, or
+* the tick_bytes directly as an opaque byte string.
+
 ---
 
-## **E.2 ConsentProof**
+## 15. Exporter Binding Primitive
 
-```cddl
+1. Exporter binding MUST reference a derivation-class CryptoSuiteProfile.
+2. Exporter context MUST be canonical CBOR encoding of:
+
+```
+{
+  pqsf_version: "2.0.2",
+  session_id: tstr,
+  role_id: tstr,
+  operation_class: "Authoritative" / "NonAuthoritative"
+}
+```
+
+3. For Authoritative operations, exporter_hash MUST NOT be null.
+4. Exporter mismatch MUST invalidate the artefact.
+
+---
+
+## 16. ConsentProof Grammar
+
+```
 ConsentProof = {
-  action:        tstr,
-  intent_hash:   bstr,
-  tick_issued:   uint,
-  tick_expiry:   uint,
+  action: tstr,
+  intent_hash: bstr,
+  issued_tick: uint,
+  expiry_tick: uint,
+  session_id: tstr,
   exporter_hash: bstr,
-  role:          tstr / null,
-  consent_id:    tstr,
-  signature_pq:  bstr
+  consent_id: tstr,
+  suite_profile: tstr,
+  signature: bstr
 }
 ```
 
+Requirements:
+
+1. ConsentProof MUST be canonical CBOR.
+2. signature MUST be computed over canonical CBOR payload with signature omitted.
+3. Producing specifications MUST ensure that intent payloads are unique per operation attempt.
+
+ConsentProof carries no authority. Enforcement semantics are external.
+
 ---
 
-## **E.3 PolicyEnforcerPolicy**
+## 17. Policy Objects and Governance Metadata
 
-```cddl
-PolicyEnforcerPolicy = {
-  policy_id:   tstr,
-  policy_hash: bstr,
-  allowlist:   [* tstr],
-  denylist:    [* tstr],
-  thresholds:  { * tstr => uint },
-  limits:      { * tstr => uint },
-  time_rules: {
-      min_delay:  uint,
-      max_window: uint
+### 17.1 PolicyObject
+
+A PolicyObject is a canonical, inert policy declaration consumed by enforcement systems.
+
+PQSF defines the structure and canonical validation rules for PolicyObject. PQSF does not define enforcement semantics.
+
+A PolicyObject MUST contain the following fields:
+
+```
+PolicyObject = {
+  policy_id: tstr,
+  policy_body: { * tstr => any },
+  policy_hash: bstr
+}
+```
+
+**Field Requirements:**
+
+* **policy_id**  
+  A tstr identifier. The namespace and interpretation of policy_id are defined by consuming specifications. Policy identifiers SHOULD use a prefix namespace.
+
+* **policy_body**  
+  A deterministic map defining policy parameters. The internal schema of policy_body is defined by the policy_id namespace. PQSF defines only canonical encoding and hashing rules.
+
+* **policy_hash**  
+  A bstr equal to the hash of the canonical CBOR encoding of policy_body under the active CryptoSuiteProfile.
+
+PolicyObject carries no authority and does not imply enforcement. A PolicyObject is valid only when canonical encoding and policy_hash validation succeed.
+
+---
+
+### 17.2 PolicyBundle
+
+A PolicyBundle is a signed wrapper that associates a PolicyObject with governance metadata and optional session binding.
+
+```
+PolicyBundle = {
+  bundle_id: tstr,
+  policy: PolicyObject,
+  issued_tick: uint,
+  exporter_hash: bstr / null,
+  governance: {
+    version: uint,
+    min_version: uint,
+    signers: [* tstr],
+    threshold: uint,
+    rollback_denylist: [* bstr],
+    rotation_lock_ticks: uint
   },
-  constraints: { * tstr => any }
+  suite_profile: tstr,
+  signature: bstr
 }
 ```
 
+**Field Requirements:**
+
+* **bundle_id**  
+  A unique tstr identifier for this specific bundle instance.
+
+* **policy**  
+  A PolicyObject as defined in Section 17.1.
+
+* **issued_tick**  
+  A uint representing the issuing tick. Interpretation and freshness enforcement are external to PQSF.
+
+* **exporter_hash**  
+  A bstr or null. When present, the bundle is bound to a specific session.
+
+* **governance**  
+  A deterministic map containing governance metadata. If present, it MUST include:
+
+  * **version** - Current policy version number (monotonically increasing)
+  * **min_version** - Minimum acceptable version (cannot roll back below this)
+  * **signers** - List of authorized signer identifiers or public key references
+  * **threshold** - M-of-N threshold for policy updates (M signatures required)
+  * **rollback_denylist** - List of policy_hash values that cannot be reactivated
+  * **rotation_lock_ticks** - Minimum tick interval between policy updates
+
+* **suite_profile**  
+  A tstr referencing the CryptoSuiteProfile used for signing.
+
+* **signature**  
+  A bstr computed over the canonical CBOR encoding of the bundle with the signature field omitted.
+
+**Validation Requirements:**
+
+PQSF defines structure and validation only. Governance monotonicity, rollback prevention, and refusal semantics are defined exclusively by consuming specifications.
+
+The `signers` field identifies public key identifiers or profile references as defined by the consuming specification.
+
+Policy evaluation semantics are external.
+
 ---
 
-## **E.4 LedgerEntry**
+## 18. LedgerEntry Grammar
 
-```cddl
+```
 LedgerEntry = {
-  event:         tstr,
-  tick:          uint,
-  payload:       { * tstr => any },
-  signature_pq:  bstr,
-  prev_hash:     bstr
+  event: tstr,
+  tick: uint,
+  payload: { * tstr => any },
+  prev_hash: bstr,
+  suite_profile: tstr,
+  signature: bstr
 }
 ```
 
-All CDDL encodings MUST follow deterministic CBOR rules defined in RFC 8949 §4.2.
+**Requirements:**
+
+1. LedgerEntry MUST be canonical CBOR.
+2. signature MUST be computed over the canonical CBOR encoding of the entry with signature field omitted.
+3. prev_hash MUST reference the hash of the previous canonical LedgerEntry.
+4. For the genesis entry, prev_hash MUST be a fixed null value or zero hash as defined by the ledger specification.
 
 ---
 
-# **ANNEX F — REFERENCE TEST VECTORS (INFORMATIVE)**
+## 19. Merkle Ledger Serialization
 
-This annex provides reference examples of canonical encoding, hashing, ledger entries, policy definitions, and other PQSF objects.
-These vectors are **informative**, aiding implementation correctness.
+PQSF defines deterministic Merkle tree construction for ledger integrity verification.
 
----
-
-# **F.1 ConsentProof — Canonical Encoding Example**
-
-Diagnostic JSON:
+### 19.1 Leaf Hash Construction
 
 ```
-{
-  "action": "spend",
-  "intent_hash": "0x112233...",
-  "tick_issued": 1730000000,
-  "tick_expiry": 1730000300,
-  "exporter_hash": "0xaabbcc...",
-  "role": "primary",
-  "consent_id": "consent-001",
-  "signature_pq": "<signature>"
-}
-```
-
-Canonical deterministic CBOR (hex, abbreviated):
-
-```
-a8
-  66 616374696f6e         ; "action"
-  65 7370656e64           ; "spend"
-  6b696e74656e745f68617368 43 112233...
-  6b7469636b5f697373756564 1a 6728b580
-  6b7469636b5f657870697279 1a 6728c3bc
-  6d6578706f727465725f68617368 42 aabbcc...
-  64 726f6c65 67 7072696d617279
-  6a636f6e73656e745f6964 6b636f6e73656e742d303031
-  6c7369676e61747572655f7071 58 40 <sig>
-```
-
-A compliant implementation MUST generate identical bytes for canonical CBOR.
-
----
-
-# **F.2 cSHAKE256 Derivation Example**
-
-Given:
-
-* root_key:
-  `0x9a7f3e2d1c8b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1`
-
-* domain: `"PQSF-Derive"`
-
-* path (CBOR):
-  `0x820102` (represents `[1, 2]`)
-
-Derive:
-
-```text
-child_key = cSHAKE256(root_key, domain="PQSF-Derive", input=0x820102)
-```
-
-Expected output (truncated):
-
-```
-0x3f1a948b...
-```
-
----
-
-# **F.3 Merkle Ledger Example**
-
-Given entries L1 and L2:
-
-```
-leaf1 = SHAKE256-256(0x00 || CBOR(L1))
-leaf2 = SHAKE256-256(0x00 || CBOR(L2))
-root  = SHAKE256-256(0x01 || leaf1 || leaf2)
-```
-
-Compliant implementations MUST produce identical outputs.
-
----
-
-# **F.4 Tick Hash Example**
-
-Canonical CBOR (abbreviated):
-
-```
-a4
-  61 74 1a 6728b580
-  6b70726f66696c655f726566 <profile_ref>
-  63 616c67 6a4d4c2d4453412d3635
-  63 736967 <sig>
-```
-
-Tick Hash:
-
-```
-SHAKE256-256(canonical_tick)
-```
-
----
-
-# **F.5 PolicyEnforcerPolicy — JSON Example**
-
-```
-{
-  "policy_id": "policy-main-001",
-  "policy_hash": "0xabc123...",
-  "allowlist": ["merchant:001", "merchant:abc"],
-  "denylist": [],
-  "thresholds": { "daily_spend_minor": 1000000 },
-  "limits": { "per_tx_minor": 250000 },
-  "time_rules": { "min_delay": 60, "max_window": 3600 },
-  "constraints": { "currency": "USD" }
-}
-```
-
-`policy_hash` MUST match canonical SHAKE256-256 output.
-
----
-
-# **F.6 LedgerEntry — JSON Example (`tick_validated`)**
-
-```
-{
-  "event": "tick_validated",
-  "tick": 1730000000,
-  "payload": {
-    "tick_hash": "0xdeadbeef...",
-    "profile_ref": "epoch-clock-v2-mainnet"
-  },
-  "signature_pq": "<ml-dsa-signature>",
-  "prev_hash": "0x00112233..."
-}
-```
-
----
-
-# **F.7 PaymentIntent — JSON Example**
-
-```
-{
-  "intent_id": "pi-1234",
-  "merchant_id": "merchant-001",
-  "amount_minor": 5000,
-  "currency": "USD",
-  "description": "Coffee",
-  "mode": "CIB",
-  "method": {
-    "kind": "psp_element",
-    "element_id": "elt-7890",
-    "capability": ["card", "3ds"]
-  },
-  "tick": {
-    "t": 1730000100,
-    "profile_ref": "epoch-clock-v2-mainnet",
-    "alg": "ML-DSA-65",
-    "sig": "<tick-sig>"
-  },
-  "consent_hash": "0x445566...",
-  "created_at": 1730000090,
-  "expires_at": 1730000390,
-  "policy_ref": "policy-main-001"
-}
-```
-
----
-
-# **F.8 KYCCredential — JSON Example (Over 18)**
-
-```
-{
-  "cred_id": "kyc-abc123",
-  "issuer_id": "issuer:kyc-provider",
-  "subject_id": "sub-7890",
-  "attributes": {
-    "over_18": true,
-    "jurisdiction": "AU"
-  },
-  "issued_at": 1730000000,
-  "expires_at": 1761536000,
-  "tick": {
-    "t": 1730000000,
-    "profile_ref": "epoch-clock-v2-mainnet",
-    "alg": "ML-DSA-65",
-    "sig": "<tick>"
-  },
-  "issuer_sig_pq": "<issuer-ml-dsa-sig>"
-}
-```
-
----
-
-# **F.9 LedgerEntry — `consent_issued`**
-
-```
-{
-  "event": "consent_issued",
-  "tick": 1730000100,
-  "payload": {
-    "consent_id": "consent-001",
-    "action": "payment.authorise",
-    "intent_hash": "0x445566..."
-  },
-  "signature_pq": "<ml-dsa-signature>",
-  "prev_hash": "0xaaaabbbbcccc..."
-}
-```
-
----
-
-# **F.10 LedgerEntry — `profile_rotated`**
-
-```
-{
-  "event": "profile_rotated",
-  "tick": 1731000000,
-  "payload": {
-    "old_profile": "epoch-clock-v2-mainnet",
-    "new_profile": "epoch-clock-v2-mainnet-child-001"
-  },
-  "signature_pq": "<ml-dsa-signature>",
-  "prev_hash": "0xbbbbccccdddd..."
-}
-```
-
----
-
-# **F.11 LedgerEntry — `erasure_proof_issued`**
-
-```
-{
-  "event": "erasure_proof_issued",
-  "tick": 1730500000,
-  "payload": {
-    "erasure_id": "erase-1234",
-    "subject_hash": "0x999988887777...",
-    "erasure_mode": "third_party",
-    "actor_id": "service:storage-1"
-  },
-  "signature_pq": "<ml-dsa-signature>",
-  "prev_hash": "0xccccddddeeee..."
-}
-```
-
----
-
-# **F.12 LedgerEntry — `runtime_drift_critical`**
-
-```
-{
-  "event": "runtime_drift_critical",
-  "tick": 1730600000,
-  "payload": {
-    "runtime_id": "rt-env-01",
-    "drift_code": "MODEL_DRIFT_CRITICAL",
-    "details": "hash_mismatch_inference_binary"
-  },
-  "signature_pq": "<ml-dsa-signature>",
-  "prev_hash": "0xddddeeeeffff..."
-}
-```
-
----
-
-# **ANNEX G — SECURE PAYMENTS MODULE (OPTIONAL, NORMATIVE)**
-
-## **G.1 Purpose and Scope (INFORMATIVE)**
-
-This optional module defines a post-quantum-secure payments flow leveraging PQSF primitives.
-The module provides:
-
-* PaymentIntent
-* AuthorisationRequest / AuthorisationResult
-* Receipt
-* replay protection
-* binding to EpochTick + ConsentProof + exporter_hash
-* privacy and optional Travel Rule fields
-
-This module is **transport-agnostic**, assuming PQSF Hybrid TLS (TLSE-EMP) and PQHD as the canonical wallet implementation.
-
----
-
-## **G.2 Roles (INFORMATIVE)**
-
-* **Payer** — End user initiating a payment.
-* **PQHD Wallet** — Consumes PQSF primitives and signs payment consent.
-* **Merchant Frontend** — Browser/native client under merchant control.
-* **Payment Gateway / PSP** — Authorises and settles transactions.
-* **Issuer / Acquirer** — Legacy card network participants.
-
-PQSF governs the Wallet–Merchant–Gateway integration.
-
----
-
-## **G.3 Security Objectives (NORMATIVE)**
-
-### **Transport Security**
-
-All payment messages MUST use PQSF Hybrid TLS 1.3 with exporter binding.
-
-### **Authorisation Binding**
-
-Every payment MUST bind:
-
-1. PaymentIntent
-2. ConsentProof (`action = payment.authorise`)
-3. a fresh EpochTick
-4. the session exporter_hash
-
-### **Replay Resistance**
-
-PSPs MUST enforce idempotency of AuthorisationRequest:
-
-* idempotency_key MUST be unique
-* stale ticks MUST be rejected
-
-### **Data Protection**
-
-* PAN/CVV MUST NOT be exposed to PQSF components.
-* Merchants MUST NOT store raw PAN/CVV.
-
-### **Auditability**
-
-Receipts MUST prove:
-
-* which intent was approved
-* by which PSP key
-* under which tick and exporter binding
-
-### **Privacy**
-
-Travel Rule data MUST be logically separable and optional.
-
----
-
-## **G.4 Deployment Modes (NORMATIVE)**
-
-### **G.4.1 Card-in-Wallet (CIW)**
-
-* PQHD holds tokenised card or network tokens
-* Merchant never sees PAN/CVV
-* Highest security mode
-
-### **G.4.2 Card-in-Browser (CIB)**
-
-* PSP-provided browser element collects PAN/CVV
-* Merchant sees only opaque element IDs
-* PQSF protects all higher layers (consent, tick, session, replay)
-
-Active mode MUST be declared via PaymentIntent.mode.
-
----
-
-## **G.5 Data Structures (CDDL, NORMATIVE)**
-
-Canonical encodings MUST be JCS JSON or deterministic CBOR.
-
-### **Aliases**
-
-```
-b64u        = tstr
-uuidv7      = tstr
-iso4217     = tstr
-unix_s      = uint
-kid         = tstr
-amount_str  = tstr
-```
-
----
-
-### **G.5.1 PaymentIntent**
-
-```cddl
-PaymentIntent = {
-  intent_id:        uuidv7,
-  merchant_id:      tstr,
-  amount_minor:     uint,
-  currency:         iso4217,
-  description:      tstr,
-  mode:             "CIW" / "CIB",
-  method:           PaymentMethod,
-  tick:             EpochTick,
-  consent_hash:     b64u,
-  created_at:       unix_s,
-  expires_at:       unix_s,
-  policy_ref:       tstr / null
-}
-
-PaymentMethod = CIW_Method / CIB_Method
-
-CIW_Method = {
-  kind:              "card_token",
-  token_ref:         tstr,
-  network:           tstr,
-  last4:             tstr,
-  exp_mmyy:          tstr,
-  hardware_attested: bool
-}
-
-CIB_Method = {
-  kind:        "psp_element",
-  element_id:  tstr,
-  capability:  [+ tstr]
-}
-```
-
-**Normative rules:**
-
-* `tick` MUST be fresh.
-* `consent_hash` MUST be hash of canonical ConsentProof.
-* `intent_id` MUST be unique.
-
----
-
-### **G.5.2 Payment Consent Binding**
-
-ConsentProof MUST use:
-
-```
-action = "payment.authorise"
-```
-
-and bind:
-
-```cddl
-PaymentConsentBinding = {
-  intent_id:    uuidv7,
-  amount_minor: uint,
-  currency:     iso4217,
-  merchant_id:  tstr,
-  mode:         "CIW" / "CIB"
-}
-```
-
-Tick MUST be valid for session exporter_hash.
-
----
-
-### **G.5.3 AuthorisationRequest**
-
-```cddl
-AuthorisationRequest = {
-  intent:           PaymentIntent,
-  consent:          ConsentProof,
-  idempotency_key:  uuidv7,
-  ?compliance_data: TravelRuleData
-}
-```
-
-Normative:
-
-* idempotency_key must be unique per merchant+intent
-* PSP MUST enforce idempotency
-
----
-
-### **G.5.4 AuthorisationResult**
-
-```cddl
-AuthorisationResult = {
-  intent_id:      uuidv7,
-  status:         "approved" / "declined" / "challenge" / "error",
-  auth_code:      tstr / null,
-  psp_ref:        tstr / null,
-  three_ds:       ThreeDSResult / null,
-  signed_receipt: Receipt / null,
-  ?error_code:    tstr,
-  ?error_detail:  tstr
-}
-
-ThreeDSResult = {
-  ds_trans_id: tstr,
-  eci:         tstr,
-  cavv:        b64u / null,
-  result:      "frictionless" / "challenge" / "failed"
-}
-```
-
-Normative:
-
-* approved → signed_receipt MUST be present
-* challenge → three_ds MUST be present
-
----
-
-### **G.5.5 Receipt**
-
-```cddl
-Receipt = {
-  receipt_id:      uuidv7,
-  intent_id:       uuidv7,
-  merchant_id:     tstr,
-  amount_minor:    uint,
-  currency:        iso4217,
-  tick:            EpochTick,
-  psp_ref:         tstr,
-  capture_later:   bool,
-  req_hash:        b64u,
-  sig_pq_gateway:  b64u,
-  sig_pub_kid:     kid
-}
-```
-
-Normative rules:
-
-* req_hash MUST be canonical hash of AuthorisationRequest
-* sig_pq_gateway MUST be ML-DSA-65
-* sig_pub_kid MUST reference PSP’s public key
-
----
-
-### **G.5.6 TravelRuleData (Optional)**
-
-```cddl
-TravelRuleData = {
-  originator:  tstr,
-  beneficiary: tstr,
-  transaction: {
-    amount:         amount_str,
-    currency:       iso4217,
-    originator_ref: tstr
-  }
-}
-```
-
-Travel Rule data MUST NOT be stored longer than regulation requires.
-
----
-
-### **G.5.7 WebhookEnvelope**
-
-```cddl
-WebhookEnvelope = {
-  event_id:       uuidv7,
-  issued_at:      unix_s,
-  type:           tstr,
-  payload:        b64u,
-  sig_pq_gateway: b64u,
-  sig_pub_kid:    kid
-}
-```
-
-MUST reject:
-
-* events older than 300 seconds
-* duplicate event_id
-
----
-
-## **G.6 Protocol Flow**
-
-### **G.6.1 Intent Creation**
-
-1. Merchant establishes TLSE-EMP.
-2. Merchant creates PaymentIntent.
-3. Wallet presents intent to user.
-
----
-
-### **G.6.2 Consent and Wallet Signing**
-
-1. Wallet validates exporter_hash.
-2. User reviews summary.
-3. Wallet signs ConsentProof.
-4. Returns it to merchant or PSP.
-
----
-
-### **G.6.3 Authorisation**
-
-1. Merchant/wallet submits AuthorisationRequest.
-2. PSP verifies:
-
-   * exporter_hash
-   * ConsentProof
-   * Tick
-   * idempotency_key
-3. PSP performs network authorisation.
-
----
-
-### **G.6.4 Result and Receipt**
-
-1. PSP returns AuthorisationResult.
-2. Approved → MUST include Receipt.
-3. Merchant stores Receipt.
-4. Wallet appends minimal ledger entry.
-
----
-
-## **G.7 Error Handling**
-
-Example mappings:
-
-* `E_IDEMPOTENT` → 409
-* `E_TICK_STALE` → 400
-* `E_CONSENT_MISMATCH` → 400
-* `E_PSP_DECLINE` → 200 ("declined")
-* `E_SCA_REQUIRED` → 202 ("challenge")
-* `E_TICK_UNAVAILABLE` → 503
-
-Wallets MUST NOT display raw issuer codes.
-
----
-
-## **G.8 Privacy and Compliance (INFORMATIVE)**
-
-* CIW provides complete PAN isolation
-* CIB isolates PAN using opaque PSP elements
-* consent ledger SHOULD record minimal references
-* Travel Rule data optional and minimally exposed
-
----
-
-## **G.9 Implementation Profiles (INFORMATIVE)**
-
-### **G.9.1 Minimal Payments Profile**
-
-* CIB-only
-* PaymentIntent, AuthorisationRequest, AuthorisationResult, Receipt
-
-### **G.9.2 Full Payments Profile**
-
-* CIW + CIB
-* all G.5 structures
-* full annex support
-
----
-
-# **ANNEX H — CRYPTOGRAPHIC ERASURE PROOF (OPTIONAL, NORMATIVE)**
-
-Cryptographic Erasure Proofs provide verifiable assurance that specific data has been permanently deleted.
-
-They support:
-
-* self-erasure
-* third-party erasure
-* zero-knowledge minimisation
-* retention compliance
-
----
-
-## **H.1 Purpose and Scope**
-
-Supports verifiable deletion of:
-
-* AI logs
-* wallet metadata
-* credentials
-* profile data
-* payment history subsets
-* identity attributes
-
----
-
-## **H.2 ErasureProof Structure**
-
-```
-ErasureProof = {
-  "erasure_id":        tstr,
-  "subject_hash":      bstr,
-  "erasure_mode":      "self" | "third_party",
-  "actor_id":          tstr,
-  "tick":              EpochTick,
-  "consent_ref":       tstr,
-  "erased_at":         uint,
-  "signature_pq":      bstr
-}
-```
-
-Normative:
-
-* subject_hash MUST be SHAKE256-256(canonical_subject_bytes)
-* erasure MUST be authorised by ConsentProof
-* tick MUST be fresh
-* signature MUST be ML-DSA-65
-
----
-
-## **H.3 Deletion Procedure**
-
-1. Canonicalise target data
-2. Hash subject_bytes
-3. User issues ConsentProof (`delete.data`)
-4. Actor deletes data
-5. Actor constructs ErasureProof
-6. Actor signs ErasureProof
-7. Optionally log via ledger
-
----
-
-## **H.4 Verification**
-
-Verifier MUST:
-
-1. canonicalise ErasureProof
-2. verify ML-DSA-65 signature
-3. validate tick
-4. fetch ConsentProof
-5. validate:
-
-```
-consent.action == "delete.data"
-consent.intent_hash == subject_hash
-```
-
-6. confirm mode & actor match expectations
-
----
-
-## **H.5 Optional Ledger Event**
-
-```
-event = "erasure_proof_issued"
-```
-
-Payload MUST include:
-
-* erasure_id
-* subject_hash
-* erasure_mode
-* actor_id
-
----
-
-## **H.6 Security Properties (INFORMATIVE)**
-
-* explicit intent-bound deletion
-* privacy-preserving (hash only)
-* independent verification (no trust in storage provider)
-* tick-bound time correctness
-
----
-
-# **ANNEX I — BROWSER PRIVACY & CONSENT CONTROLS (OPTIONAL, NORMATIVE)**
-
-## **I.1 Purpose and Scope**
-
-Defines per-category browser-level consent and privacy controls.
-Allows users to grant or deny fine-grained permissions:
-
-* AI training allowed / marketing prohibited
-* analytics allowed / profiling prohibited
-* retention controls
-* session vs persistent scopes
-
----
-
-## **I.2 PrivacyPolicy Structure**
-
-```
-PrivacyPolicy = {
-  "policy_id":    tstr,
-  "grants":       { * tstr => bool },
-  "retention":    { * tstr => uint },
-  "scope":        "session" | "persistent",
-  "tick":         EpochTick,
-  "consent_ref":  tstr,
-  "signature_pq": bstr
-}
-```
-
-Normative:
-
-* grants MUST list explicit categories
-* retention MAY be omitted
-* scope MUST be declared
-* signature MUST be ML-DSA-65
-
----
-
-## **I.3 Consent Binding**
-
-ConsentProof MUST have:
-
-```
-action = "privacy.set_policy"
-intent_hash = SHAKE256-256(canonical(PrivacyPolicy))
-```
-
----
-
-## **I.4 Enforcement at Runtime**
-
-When a page/script requests data:
-
-1. Canonicalise requested category
-2. Check grants
-3. If denied → block
-4. If retention expired → re-consent
-5. Always fail-closed
-
----
-
-## **I.5 Third-Party Access Control**
-
-All 3P script requests MUST be subject to the same enforcement.
-
-Unauthorized access MUST trigger:
-
-```
-privacy_violation_attempt
-```
-
-(optional ledger entry).
-
----
-
-## **I.6 Optional Ledger Events**
-
-* privacy_policy_applied
-* privacy_policy_updated
-* privacy_violation_attempt
-
----
-
-## **I.7 Example (Informative)**
-
-```
-grants = {
-  "ai_training": true,
-  "marketing": false,
-  "analytics": true,
-  "personalisation": true
-}
-
-retention = {
-  "ai_training": 604800,
-  "analytics": 86400
-}
-
-scope = "persistent"
-```
-
----
-
-# **ANNEX J — EPHEMERAL CARTS & PRIVACY-PRESERVING ECOMMERCE (OPTIONAL, NORMATIVE)**
-
-## **J.1 Purpose and Scope**
-
-This annex defines a privacy-preserving ecommerce model where:
-
-* users browse anonymously
-* merchants see no cart until checkout
-* carts are local-only and PQ-encrypted
-* sessions use ephemeral PQ keys
-* merchant visibility requires explicit consent
-* tracking is impossible by design
-
-This annex strengthens privacy without altering payment flows defined in Annex G.
-
----
-
-## **J.2 EphemeralSession Structure**
-
-```
-EphemeralSession = {
-  "session_id":        tstr,
-  "session_pubkey":    bstr,
-  "exporter_hash":     bstr,
-  "created_at_tick":   EpochTick
-}
-```
-
-Normative:
-
-* session keypair MUST be ephemeral (per browsing session)
-* exporter_hash MUST bind session to transport
-* MUST NOT persist beyond session
-
----
-
-## **J.3 EphemeralCart Structure**
-
-```
-EphemeralCart = {
-  "cart_id":      tstr,
-  "session_id":   tstr,
-  "items":        [ CartItem ],
-  "policy_ref":   tstr / null,
-  "created_at":   uint,
-  "expires_at":   uint,
-  "hash":         bstr
-}
+leaf_hash = SHAKE256-256(0x00 || canonical(ledger_entry))
 ```
 
 Where:
+* `0x00` is a single-byte domain separator for leaf nodes
+* `canonical(ledger_entry)` is the canonical CBOR encoding of the LedgerEntry
+* `||` denotes byte concatenation
+
+### 19.2 Internal Node Hash Construction
 
 ```
-CartItem = {
-  "sku":  tstr,
-  "qty":  uint,
-  "price": uint,
-  "meta": { * tstr => any }
+node_hash = SHAKE256-256(0x01 || left_hash || right_hash)
+```
+
+Where:
+* `0x01` is a single-byte domain separator for internal nodes
+* `left_hash` and `right_hash` are the child node hashes
+* `||` denotes byte concatenation
+
+### 19.3 Odd Number of Nodes
+
+If a level has an odd number of nodes:
+
+1. The final node MAY be duplicated for pairing at that level.
+2. This rule MUST be consistent within a deployment.
+3. Alternative: The final node MAY be promoted to the next level without pairing.
+4. Whichever approach is chosen MUST be documented and consistent.
+
+### 19.4 Root Computation
+
+The Merkle root is computed by:
+
+1. Constructing leaf hashes for all ledger entries.
+2. Pairing adjacent leaf hashes and computing internal node hashes.
+3. Recursively pairing and hashing until a single root hash remains.
+4. The final root hash is the Merkle root.
+
+---
+
+## 20. RecoveryCapsule Grammar
+
+```
+RecoveryCapsule = {
+  capsule_id: tstr,
+  guardian_set: [* tstr],
+  threshold: uint,
+  encrypted_material: bstr,
+  creation_tick: uint,
+  valid_from_tick: uint,
+  recovery_delay: uint,
+  suite_profile: tstr,
+  signature: bstr
 }
 ```
 
-Normative:
+**Requirements:**
 
-* MUST NOT be transmitted until checkout
-* MUST be deterministically hashed:
-
-```
-cart.hash = SHAKE256-256(canonical(cart))
-```
-
-* MAY be encrypted locally via ML-KEM-1024
+1. RecoveryCapsule MUST be canonical CBOR.
+2. signature MUST be computed over the canonical CBOR encoding of the capsule with signature field omitted.
+3. Interpretation of encrypted_material is defined by the consuming specification.
+4. recovery_delay defines the minimum tick interval between creation_tick and recovery activation.
 
 ---
 
-## **J.4 Merchant Visibility Rules**
+## 21. Encrypted-Before-Transport Wrapper
 
-Before checkout:
+PQSF defines encrypted artefact wrapping for secure transport and storage.
 
-* merchant MUST NOT see the cart
-* merchant MUST NOT receive identifiers
-* merchant MUST NOT track items added/removed
-* merchant MUST NOT infer user identity
+### 21.1 EBT Requirements
 
-Only after checkout-start consent MAY the cart be transmitted.
+1. Sensitive artefacts transported or stored under PQSF MUST be encrypted before entering any transport or storage boundary outside the originating security domain.
+2. EBT encryption MUST satisfy:
+   * Canonical input encoding for plaintext and associated data
+   * An authenticated encryption scheme selected from the supported list
 
----
+### 21.2 EBT Key Derivation
 
-## **J.5 Checkout Commitment Flow**
-
-1. User initiates checkout
-2. Wallet signs ConsentProof:
+EBT encryption keys MUST be derived deterministically:
 
 ```
-action = "checkout.start"
-intent_hash = cart.hash
+ebt_key = cSHAKE256(
+  root_seed,
+  domain = "PQSF-EBT:<label>",
+  input  = canonical(context_parameters)
+)
 ```
 
-3. Cart is transmitted only after consent
-4. Merchant MUST verify:
+Where:
+* `root_seed` is a high-entropy secret (minimum 256 bits)
+* `<label>` identifies the specific EBT use case
+* `context_parameters` are canonically encoded contextual inputs
+
+### 21.3 Supported AEAD Schemes
+
+PQSF recognizes the following authenticated encryption schemes for EBT:
+
+**Required (Post-Quantum):**
+* ML-KEM-1024 + AES-256-GCM
+  * Use ML-KEM-1024 to encapsulate a symmetric key
+  * Use encapsulated key with AES-256-GCM for authenticated encryption
+
+**Optional (Classical Compatibility):**
+* AES-256-GCM (with pre-shared or derived keys)
+* XChaCha20-Poly1305
+
+Implementations claiming post-quantum compliance MUST support ML-KEM-1024 + AES-256-GCM.
+
+### 21.4 EBT Nonce Requirements
+
+EBT nonces MUST satisfy:
+
+1. Generated from a cryptographically secure random number generator (CSPRNG).
+2. Never reused with the same key.
+3. Length requirements:
+   * **96 bits (12 bytes)** for AES-256-GCM
+   * **192 bits (24 bytes)** for XChaCha20-Poly1305
+   * **Scheme-specific** for ML-KEM-based constructions
+
+### 21.5 EBTEnvelope Structure
 
 ```
-cart.hash == consent.intent_hash
-```
-
-5. Payment then proceeds via Annex G.
-
----
-
-## **J.6 Expiry & Auto-Zeroisation**
-
-* session keypairs MUST be deleted after session
-* carts MUST be deleted after expiration
-* erasure MAY produce an ErasureProof (Annex H)
-
----
-
-## **J.7 Optional Ledger Events**
-
-* ephemeral_session_started
-* checkout_started
-* checkout_committed
-* ephemeral_cart_erased
-
-All MUST be signed and tick-bound.
-
----
-
-## **J.8 Security Properties (Informative)**
-
-* browsing unlinkability
-* no persistent IDs
-* no merchant visibility until user consents
-* cryptographic binding of checkout to cart state
-* deterministic enforcement rules
-* privacy-first ecommerce architecture
-
----
-
-# **ANNEX K — VERIFIED IDENTITY & KYC CREDENTIALS (OPTIONAL, NORMATIVE)**
-
-## **K.1 Purpose and Scope**
-
-This annex defines an optional, privacy-preserving identity credential model.
-The goal is to allow:
-
-* **third-party verified identity**
-* **user-controlled selective disclosure**
-* **minimal information release**
-* **no correlation identifiers**
-* **privacy across independent services**
-
-PQSF treats identity as **attribute-based** rather than **document-based**, allowing proofs such as:
-
-* “over 18”
-* “resident in AU”
-* “verified customer”
-
-without revealing:
-
-* legal name
-* address
-* phone number
-* date of birth
-* government identifiers
-
-Full identity may be revealed **only if the user consents** or **lawfully required**.
-
----
-
-## **K.2 KYCCredential Structure (NORMATIVE)**
-
-```
-KYCCredential = {
-  "cred_id":       tstr,
-  "issuer_id":     tstr,
-  "subject_id":    tstr,
-  "attributes":    { * tstr => any },
-  "issued_at":     uint,
-  "expires_at":    uint / null,
-  "tick":          EpochTick,
-  "issuer_sig_pq": bstr
+EBTEnvelope = {
+  label: tstr,
+  tick: uint / null,
+  session_id: tstr / null,
+  exporter_hash: bstr / null,
+  suite_profile: tstr,
+  nonce: bstr,
+  aad: bstr,
+  ciphertext: bstr,
+  tag: bstr
 }
 ```
 
-### Normative rules:
+**Field Requirements:**
 
-* MUST be canonicalised before signature.
-* `issuer_sig_pq` MUST be ML-DSA-65.
-* `attributes` MUST contain only user-approved fields.
-* PQSF does not define issuer trust policy — deployments do.
+* **label** - Human-readable identifier for the envelope type
+* **tick** - Optional timestamp for freshness tracking
+* **session_id** - Optional session binding
+* **exporter_hash** - Optional session exporter binding
+* **suite_profile** - References the CryptoSuiteProfile defining the AEAD scheme
+* **nonce** - The nonce/IV used for encryption (never reused)
+* **aad** - Additional authenticated data (canonical encoding of metadata)
+* **ciphertext** - Encrypted payload
+* **tag** - Authentication tag from the AEAD scheme
+
+**Validation Requirements:**
+
+1. EBTEnvelope MUST be canonical CBOR.
+2. aad MUST be the canonical encoding of associated data fields.
+3. ciphertext MUST be encryption of the canonical plaintext bytes.
+4. tag MUST be the AEAD authentication tag.
+5. Where exporter binding is used, EBTEnvelope exporter_hash MUST match session exporter_hash.
+
+PQSF defines EBT structure and wrapping requirements only. Operational refusal behaviour is external.
 
 ---
 
-## **K.3 Selective Disclosure (NORMATIVE)**
+## 22. Supply Chain Artefact Types
 
-Selective disclosure allows users to reveal only a subset of credential attributes.
+PQSF defines deterministic artefact schemas for supply-chain integrity.
+
+### 22.1 Runtime Signing Key (RSK)
+
+Every deployable component (server, service, container, binary) MUST maintain a Runtime Signing Key.
 
 ```
-KYCDisclosure = {
-  "cred_id":      tstr,
-  "disclosed":    { * tstr => any },
-  "tick":         EpochTick,
-  "consent_ref":  tstr,
-  "signature_pq": bstr
+RuntimeSignature = {
+  component_id: tstr,
+  build_hash: bstr,
+  config_hash: bstr,
+  environment_hash: bstr,
+  issued_tick: uint,
+  expiry_tick: uint,
+  suite_profile: tstr,
+  signature: bstr
 }
 ```
 
-### Normative rules:
+**Requirements:**
+1. RuntimeSignature MUST be generated at deployment/startup
+2. signature MUST be verifiable by clients before trust establishment
+3. build_hash MUST be SHAKE256-256 of canonical build artefact
+4. Prevents: poisoned deployments, swapped binaries, silent config changes
 
-* `disclosed` MUST be canonicalised.
-* `signature_pq` MUST be ML-DSA-65.
-* Verifier MUST confirm each disclosed field matches original credential.
-* No undisclosed attributes MAY leak.
+### 22.2 Publish Key (PUK) Artefacts
 
----
-
-## **K.4 Verification (NORMATIVE)**
-
-Verifiers MUST:
-
-1. canonicalise KYCDisclosure
-2. verify ML-DSA-65 signature
-3. validate tick
-4. validate ConsentProof
-5. validate issuer signature (via KYCCredential)
-6. confirm attributes are unchanged
-7. apply issuer trust policy
-
-If ANY step fails → reject.
-
----
-
-## **K.5 Privacy Considerations (INFORMATIVE)**
-
-PQSF treats identity as a **privacy-first mechanism**:
-
-* users disclose only what is required
-* verifiers MUST NOT receive unrelated attributes
-* disclosures are tick-bound and explicit
-* no correlation identifiers are exposed
-* full legal identity MUST NOT be disclosed without explicit user consent
-* full identity MAY be disclosed only in response to a lawful, authorised investigative request
-
-This annex ensures KYC can exist *without surveillance* or unintended data spread.
-
----
-
-# **ANNEX L — DELEGATED IDENTITY (OPTIONAL, NORMATIVE)**
-
-## **L.1 Purpose and Scope**
-
-Defines a deterministic, privacy-preserving framework for delegating identity or authority to:
-
-* another device
-* a family member
-* a trusted helper
-* a service agent
-* an automation system
-
-Delegation is:
-
-* scoped
-* consent-bound
-* tick-bound
-* revocable
-* privacy-minimised
-
----
-
-## **L.2 DelegatedIdentity Structure (NORMATIVE)**
+Static assets, installers, containers, and media MUST be signed with Publish Keys.
 
 ```
-DelegatedIdentity = {
-  "delegation_id":  tstr,
-  "subject_id":     tstr,
-  "delegate_id":    tstr,
-  "scopes":         [* tstr],
-  "limits":         { * tstr => uint },
-  "valid_from":     uint,
-  "valid_until":    uint,
-  "tick":           EpochTick,
-  "consent_ref":    tstr,
-  "signature_pq":   bstr
+PublishSignature = {
+  artefact_id: tstr,
+  content_hash: bstr,
+  artefact_type: "container" / "binary" / "archive" / "media",
+  metadata: { * tstr => any },
+  issued_tick: uint,
+  suite_profile: tstr,
+  signature: bstr
 }
 ```
 
-Normative Rules:
+**Requirements:**
+1. Clients MUST verify PUK signatures even from CDN/mirrors
+2. content_hash MUST be SHAKE256-256 of raw artefact bytes
+3. Prevents: CDN injection, mirror poisoning, dependency substitution
 
-* MUST be authorised by ConsentProof (`action="identity.delegate"`).
-* `scopes` MUST explicitly define permitted actions.
-* `limits` MUST define per-scope restrictions.
-* lifetime MUST be bounded by tick_expiry of authorising consent.
-* signature MUST be ML-DSA-65.
+### 22.3 Operation-Scoped Keys (OSK)
 
----
-
-## **L.3 Verification (NORMATIVE)**
-
-Verifier MUST:
-
-1. canonicalise DelegatedIdentity
-2. verify signature
-3. validate EpochTick
-4. check ConsentProof
-5. enforce scopes and limits
-
-Fail-closed behaviour is mandatory.
-
----
-
-## **L.4 Revocation (NORMATIVE)**
+Privileged supply-chain actions (build, deploy, publish) MUST use one-time OSKs.
 
 ```
-DelegationRevocation = {
-  "delegation_id": tstr,
-  "tick":          EpochTick,
-  "signature_pq":  bstr
+OperationKey = {
+  operation_id: tstr,
+  operation_type: "build" / "deploy" / "publish" / "sign",
+  nonce: bstr,
+  issued_tick: uint,
+  expiry_tick: uint,
+  suite_profile: tstr,
+  signature: bstr
 }
 ```
 
-Revocation MUST:
+**Requirements:**
+1. OSKs MUST NOT be reused
+2. Replay MUST be rejected
+3. expiry_tick MUST enforce time-bounded validity
+4. Prevents: stolen CI credentials, replayed deploy actions
 
-* immediately invalidate delegation
-* be logged to the PQSF ledger (`delegation_revoked`)
+### 22.4 Delegated Keys (DK) for CI/CD
 
----
-
-## **L.5 Privacy (INFORMATIVE)**
-
-* delegate receives only scoped identity
-* no sensitive personal data included by default
-* no correlation identifiers beyond delegation_id
-* revocable and time-limited
-
----
-
-# **ANNEX M — DELEGATED PAYMENTS (OPTIONAL, NORMATIVE)**
-
-## **M.1 Purpose and Scope**
-
-This annex defines formal structures for delegating **payment authority** in a secure, tick-bound, deterministic way.
-
-Supports:
-
-* family spending limits
-* employee delegated spending
-* subscription automation
-* merchant-specific delegation
-* spending constraints
-
-All delegated payments remain governed by Policy Enforcer and ConsentProof.
-
----
-
-## **M.2 DelegatedPaymentCredential Structure (NORMATIVE)**
+Build systems receive short-lived Delegation Certificates.
 
 ```
-DelegatedPaymentCredential = {
-  "delegation_id":     tstr,
-  "payer_id":          tstr,
-  "delegate_id":       tstr,
-  "allowed_merchants": [* tstr] / null,
-  "spend_limit_minor": uint,
-  "currency":          iso4217,
-  "per_tx_limit":      uint / null,
-  "interval_limit":    uint / null,
-  "valid_from":        uint,
-  "valid_until":       uint,
-  "tick":              EpochTick,
-  "consent_ref":       tstr,
-  "signature_pq":      bstr
+DelegationCertificate = {
+  delegate_id: tstr,
+  scope: [* tstr],  // e.g., ["build", "test"]
+  issued_tick: uint,
+  expiry_tick: uint,
+  revocable: bool,
+  suite_profile: tstr,
+  signature: bstr
 }
 ```
 
-Normative notes:
+**Requirements:**
+1. DKs MUST be narrowly scoped
+2. DKs MUST be short-lived (default: 3600 seconds)
+3. Revocation MUST propagate immediately
+4. No long-lived API keys permitted
 
-* MUST be signed with ML-DSA-65
-* MUST be authorised via ConsentProof (`action="payment.delegate"`)
-* MUST enforce monetary limits and scopes
-* MUST be tick-bound
-* MUST be canonical
+### 22.5 Audit Key (ARK) Artefacts
 
----
-
-## **M.3 Delegated Payment Transaction**
+Long-lived Audit Keys sign compliance artefacts.
 
 ```
-DelegatedPayment = {
-  "delegation_id": tstr,
-  "intent":        PaymentIntent,
-  "delegate_tick": EpochTick,
-  "signature_pq":  bstr
+AuditSignature = {
+  audit_id: tstr,
+  event_type: "build_summary" / "deployment_snapshot" / "policy_attestation",
+  payload_hash: bstr,
+  issued_tick: uint,
+  suite_profile: tstr,
+  signature: bstr
 }
 ```
 
-Normative:
-
-* MUST derive from a valid DelegatedPaymentCredential
-* MUST validate tick freshness
-* MUST validate ML-DSA-65 signature
-
----
-
-## **M.4 Verification Rules**
-
-PSP, merchant, or wallet MUST:
-
-1. verify DelegatedPaymentCredential signature
-2. verify Delegate signature
-3. validate Tick and ConsentProof
-4. enforce `spend_limit_minor` cumulative
-5. enforce `per_tx_limit`
-6. enforce `interval_limit`
-7. enforce merchant allowlist/denylist
-
-Fail-closed required.
+**Requirements:**
+1. ARK signatures MUST be append-only
+2. ARK fingerprints MAY be published publicly
+3. Used for: WORM-style audit trails, regulator compliance
 
 ---
 
-## **M.5 Ledger Events (OPTIONAL)**
+## 23. Supply Chain Ledger Anchoring
 
-Deployments MAY log:
+### 23.1 Cross-Registrar Anchoring
 
-* `delegated_payment_created`
-* `delegated_payment_redeemed`
-* `delegated_payment_revoked`
-* `delegated_payment_violation`
+Supply-chain events (build, publish, revoke) MUST be:
+1. Recorded in registrar logs
+2. Anchored to deterministic ledger (as defined in Section 11)
+3. Cross-signed by peer registrars (where applicable)
 
-All MUST be ML-DSA-65 signed and tick-ordered.
-
----
-
-## **M.6 Revocation (NORMATIVE)**
+### 23.2 Supply Chain Event Structure
 
 ```
-DelegatedPaymentRevocation = {
-  "delegation_id": tstr,
-  "tick":          EpochTick,
-  "signature_pq":  bstr
+SupplyChainEvent = {
+  event_id: tstr,
+  event_type: "build" / "deploy" / "publish" / "revoke",
+  artefact_ref: tstr,
+  actor_id: tstr,
+  tick: uint,
+  ledger_entry_hash: bstr,
+  signature: bstr
 }
 ```
 
-Revocation MUST immediately invalidate delegation and SHOULD be written to the ledger.
+**Requirements:**
+1. Events MUST be tamper-evident
+2. Monotonic tick ordering MUST be enforced
+3. prev_hash chain MUST validate
+
+### 23.3 Revocation as Supply-Chain Control
+
+Any compromised key (DK, OSK, RSK, PUK) MUST be revocable via:
+1. Revocation artefact with governance signature
+2. Immediate propagation to clients
+3. Artefact marking as untrusted
+
+Wallets/clients MUST:
+1. Block affected artefacts immediately
+2. Mark runtimes as untrusted (Red ✗ state)
 
 ---
 
-## **M.7 Privacy (INFORMATIVE)**
+## 24. Reproducible Build Support
 
-* delegates see only minimal payment metadata
-* merchant identity is constrained by allowlist
-* no persistent identifiers unless user opts in
-* spending behaviour cannot be profiled across merchants
+### 24.1 Build Attestation Structure
+
+```
+BuildAttestation = {
+  build_id: tstr,
+  source_hash: bstr,
+  build_env_hash: bstr,
+  output_hash: bstr,
+  reproducibility_claim: bool,
+  verification_keys: [* bstr],  // For third-party verification
+  issued_tick: uint,
+  suite_profile: tstr,
+  signature: bstr
+}
+```
+
+### 24.2 Reproducibility Requirements
+
+1. Builds claiming `reproducibility_claim: true` MUST:
+   - Be deterministic across platforms
+   - Produce identical output_hash for identical inputs
+   - Publish verification instructions
+
+2. Third-party verifiers MAY:
+   - Re-build from source
+   - Compare output_hash
+   - Sign independent verification artefacts
+
+3. Divergence MUST:
+   - Trigger security review
+   - Be logged in audit trail
+   - Prevent deployment until resolved
 
 ---
 
-# **ANNEX N — Quantum-Safe Wallet-Backed User Login (OPTIONAL, NORMATIVE)**
+## 25. No Trust in Network Location
 
-## **N.1 Purpose and Scope**
+PQSF supply-chain security MUST NOT rely on:
+1. IP allowlists
+2. Shared secrets
+3. Implicit trust in CI environments
+4. DNS or hostname verification
 
-This annex defines an optional, wallet-backed user login mechanism that uses PQSF primitives instead of passwords or ad hoc session identifiers. The goal is to allow applications to authenticate users by:
+All trust MUST be:
+1. Cryptographic
+2. Scoped
+3. Time-bound (via Epoch Clock ticks)
+4. Auditable
 
-* treating the wallet as the primary user credential,
-* binding login to a fresh EpochTick and exporter_hash,
-* using ConsentProof to record explicit user intent,
-* avoiding reusable passwords and shared secrets.
+---
 
-This annex does not modify any core PQSF semantics. It is an application pattern that combines PQSF, PQHD, and optional identity modules.
+## 26. Security Considerations (Supply Chain Additions)
 
-## **N.2 Roles (Informative)**
+### Threats Addressed
 
-* **User**
-  Person who controls a PQHD wallet and wishes to log in.
+Supply-chain extensions address:
 
-* **Wallet Client**
-  PQHD or PQSF-aware application that can produce ConsentProof objects and export non-custodial authentication assertions.
+- **Dependency poisoning:** PUK + RSK + signed manifests
+- **CI credential theft:** OSKs + short TTL
+- **Insider deploy sabotage:** Scoped DKs + audit trail
+- **CDN injection:** PUK verification at client
+- **Build/runtime mismatch:** RSK startup attestation
+- **Silent config changes:** Signed config manifests
+- **Log tampering:** Ledger anchoring prevents history rewriting
 
-* **Relying Service**
-  Website, API, or application that wishes to authenticate a user using wallet-backed login instead of passwords.
+### Threat Model Updates
 
-* **Identity Provider (optional)**
-  Entity that issues KYCCredential or other identity attributes under Annex K.
+Supply-chain adversaries MAY:
+- Compromise build infrastructure
+- Inject malicious dependencies
+- Poison CDN/mirror content
+- Steal long-lived credentials
+- Tamper with deployment configs
 
-## **N.3 Data Structures (Normative)**
+Supply-chain defenses DO NOT protect against:
+- Zero-day vulnerabilities in dependencies (detection only)
+- Malicious but correctly-signed artefacts (requires governance)
+- Compromised root signing keys (requires revocation + recovery)
 
-### **N.3.1 WalletLoginIntent**
+---
 
-A login begins with a WalletLoginIntent issued by the relying service:
+
+## 27. Sovereign Transport Protocol Grammar (STP)
+
+PQSF defines a deterministic, minimal message grammar for STP framing.
+
+### 27.1 STP Message Requirements
+
+STP messages MUST include:
+
+* protocol version identifier
+* session identifier
+* nonce material for session establishment or resumption
+* capability advertisement as a bounded list of tokens
+* exporter_hash field when a session exporter binding is produced
+
+### 27.2 STP Message Types
+
+STP defines the following message types:
+
+#### 27.2.1 STP-INIT
 
 ```
-WalletLoginIntent = {
-  "intent_id":      tstr,
-  "service_id":     tstr,
-  "redirect_uri":   tstr / null,
-  "scopes":         [* tstr],
-  "nonce":          bstr,
-  "tick":           EpochTick,
-  "expires_at":     uint,
-  "policy_ref":     tstr / null
+STP-INIT = {
+  version: tstr,
+  session_id: tstr,
+  client_nonce: bstr,
+  client_caps: [* tstr]
 }
 ```
 
-Normative requirements:
+**Purpose:** Client initiates a new session.
 
-1. `intent_id` MUST be unique per service.
-2. `tick` MUST be a valid EpochTick under PQSF section 4.
-3. `expires_at` MUST be derived from `tick.t` and MUST NOT exceed the normal consent window.
-4. `nonce` MUST be unpredictable and MUST be unique per intent.
-5. The intent MUST be encoded using deterministic CBOR or JCS JSON.
+**Requirements:**
+* version MUST be "1.0" for this specification version
+* session_id MUST be unique per session attempt
+* client_nonce MUST be generated from CSPRNG (minimum 128 bits)
+* client_caps lists client-supported capabilities
 
-### **N.3.2 WalletLoginConsent**
-
-The wallet binds user intent to the login via a ConsentProof:
+#### 27.2.2 STP-ACCEPT
 
 ```
-ConsentProof = {
-  "action":        "auth.login",
-  "intent_hash":   bstr,
-  "tick_issued":   uint,
-  "tick_expiry":   uint,
-  "exporter_hash": bstr,
-  "role":          tstr / null,
-  "consent_id":    tstr,
-  "signature_pq":  bstr
+STP-ACCEPT = {
+  version: tstr,
+  session_id: tstr,
+  server_nonce: bstr,
+  server_caps: [* tstr],
+  exporter_hash: bstr
 }
 ```
 
-Normative requirements:
+**Purpose:** Server accepts session and provides exporter binding.
 
-1. `intent_hash` MUST equal `SHAKE256-256(canonical(WalletLoginIntent))`.
-2. `action` MUST be `"auth.login"` for login flows.
-3. `tick_issued` and `tick_expiry` MUST satisfy PQSF section 5.3.
-4. `exporter_hash` MUST match the active transport session as in PQSF section 7.2.
-5. The ConsentProof MUST be canonical and signed with ML-DSA-65.
+**Requirements:**
+* version MUST match STP-INIT version
+* session_id MUST match STP-INIT session_id
+* server_nonce MUST be generated from CSPRNG (minimum 128 bits)
+* server_caps lists server-supported capabilities (subset of client_caps)
+* exporter_hash is derived from the established transport session
 
-### **N.3.3 WalletLoginAssertion**
-
-The wallet produces a WalletLoginAssertion that the relying service can verify:
+#### 27.2.3 STP-RESUME
 
 ```
-WalletLoginAssertion = {
-  "assertion_id":   tstr,
-  "intent_id":      tstr,
-  "service_id":     tstr,
-  "user_pub":       bstr,
-  "tick":           EpochTick,
-  "exporter_hash":  bstr,
-  "consent_id":     tstr,
-  "credential_ref": tstr / null,
-  "signature_pq":   bstr
+STP-RESUME = {
+  version: tstr,
+  previous_session_id: tstr,
+  resume_token: bstr,
+  client_nonce: bstr
 }
 ```
 
-Normative requirements:
+**Purpose:** Client attempts to resume a previous session.
 
-1. `user_pub` MUST be derived deterministically from a wallet key class that is dedicated to authentication and MUST NOT be a custody key.
-2. `tick` MUST be a fresh EpochTick that satisfies PQSF section 4.3.
-3. `exporter_hash` MUST match both the wallet session and the relying service session.
-4. `credential_ref` MAY reference a KYCCredential or KYCDisclosure under Annex K but is optional.
-5. `signature_pq` MUST be an ML-DSA-65 signature over the canonical WalletLoginAssertion.
+**Requirements:**
+* previous_session_id references an earlier STP-ACCEPT session
+* resume_token is an opaque token provided by server in previous session
+* client_nonce MUST be fresh (never reused from previous session)
 
-## **N.4 Login Flow (Normative)**
-
-### **N.4.1 Step 1 — Intent Creation**
-
-The relying service:
-
-1. Generates a WalletLoginIntent.
-2. Canonicalises and signs or logs it locally.
-3. Presents the intent to the user wallet via browser, QR, deep link, or STP.
-
-The intent MUST be delivered over a PQSF compliant transport (TLSE-EMP or STP).
-
-### **N.4.2 Step 2 — User Consent in Wallet**
-
-The wallet:
-
-1. Validates the EpochTick in the intent.
-2. Validates `service_id`, `scopes`, and optional `policy_ref` against local policy.
-3. Constructs a ConsentProof with `action = "auth.login"`.
-4. Signs the ConsentProof using an ML-DSA-65 key from a non-custodial class dedicated to authentication.
-
-If any validation fails, the wallet MUST refuse to proceed and MUST NOT generate a login assertion.
-
-### **N.4.3 Step 3 — Assertion Creation**
-
-If consent is valid, the wallet:
-
-1. Derives an authentication public key `user_pub` deterministically from a PQHD or PQSF key class that is reserved for login identities.
-2. Builds a WalletLoginAssertion that includes `intent_id`, `service_id`, `user_pub`, `tick`, `exporter_hash`, and `consent_id`.
-3. Signs the assertion with ML-DSA-65.
-4. Returns the assertion to the relying service over a PQSF transport.
-
-### **N.4.4 Step 4 — Service-Side Validation**
-
-The relying service MUST:
-
-1. Canonicalise the WalletLoginAssertion.
-2. Verify the ML-DSA-65 signature.
-3. Validate the EpochTick freshness and monotonicity.
-4. Reconstruct `intent_hash` and validate the corresponding ConsentProof.
-5. Confirm that `exporter_hash` matches the active session.
-6. Check that `intent_id` and `nonce` have not been used before.
-
-If all checks succeed, the service MAY create a local user session bound to `user_pub` and MUST record a ledger entry using the PQSF ledger with an event such as:
+#### 27.2.4 STP-ERROR
 
 ```
+STP-ERROR = {
+  version: tstr,
+  code: tstr,
+  session_id: tstr,
+  message: tstr / null
+}
+```
+
+**Purpose:** Either party signals an error condition.
+
+**Requirements:**
+* code is a structured error code (defined by consuming specifications)
+* session_id references the affected session
+* message is an optional human-readable description
+
+### 27.3 STP Canonical Encoding
+
+STP messages MUST be canonical CBOR as defined in Section 7.
+
+### 27.4 STP Capability Negotiation
+
+1. Client advertises capabilities in client_caps.
+2. Server MUST respond with server_caps containing only capabilities it supports.
+3. The effective capability set is the intersection of client_caps and server_caps.
+4. If intersection is empty or insufficient, server SHOULD respond with STP-ERROR.
+
+---
+
+## 28. Failure Semantics
+
+1. Validation of any PQSF-native object MUST be atomic. Either all validation steps succeed and the object is accepted, or any single validation failure causes rejection with no partial acceptance.
+2. Any PQSF-native object failing structural validation, canonical encoding validation, profile validation, hash validation, or signature verification MUST be rejected.
+3. Any Epoch Clock artefact whose verified bytes do not match the supplied JCS Canonical JSON bytes MUST be rejected by consuming enforcement specifications.
+4. PQSF defines no retry, escalation, or authority behaviour.
+
+---
+
+## 29. Conformance
+
+An implementation is PQSF-conformant if it:
+
+* enforces strict deterministic CBOR encoding for PQSF-native objects
+* enforces the Epoch Clock JCS Canonical JSON exception and forbids Epoch Clock re-encoding
+* enforces CryptoSuiteProfile indirection and pinning
+* enforces profile distribution, revocation, and emergency transition rules
+* enforces exporter binding rules
+* enforces deterministic hashing, signing, and derivation
+* enforces schema validation
+* rejects malformed or non canonical objects
+* supports EBT encryption with required AEAD schemes
+* implements STP message grammar correctly
+
+---
+
+## 30. Explicit Dependencies
+
+PQSF depends on:
+
+* RFC 8949 Deterministic CBOR
+* RFC 8785 JCS Canonical JSON (for Epoch Clock artefacts only)
+* TLS 1.3 exporter mechanism (RFC 8446)
+* ML-DSA-65 for post-quantum signatures
+* SHAKE256-256 for hashing
+* ML-KEM-1024 for post-quantum key encapsulation (EBT)
+* cSHAKE256 for key derivation
+* externally defined CryptoSuiteProfile signing keys
+* external enforcement specifications, including PQSEC
+* external time specification, including Epoch Clock
+
+PQSF defines no enforcement authority.
+
+---
+
+
+## 31. Security Considerations
+
+### Threats Addressed
+
+PQSF addresses the following threats within its defined scope:
+
+- **Encoding ambiguity and parser differentials:**  
+  Deterministic canonical encoding eliminates semantically equivalent but
+  byte-distinct representations that can be exploited across
+  implementations.
+
+- **Hash and signature mismatch attacks:**  
+  Byte-identical canonical encoding ensures that hashing and signing
+  inputs are stable and reproducible across platforms.
+
+- **Algorithm downgrade and agility failures:**  
+  CryptoSuiteProfile indirection prevents hardcoded algorithm reliance
+  and enables governed transitions without specification rewrites.
+
+- **Session confusion and cross-session replay:**  
+  Exporter binding primitives allow consuming specifications to bind
+  artefacts to authenticated session state.
+
+---
+
+### Threats NOT Addressed (Out of Scope)
+
+PQSF does NOT protect against:
+
+- **Enforcement errors or policy mistakes:**  
+  PQSF provides primitives only. Enforcement correctness is delegated to
+  consuming specifications (e.g., PQSEC).
+
+- **Transport protocol flaws:**  
+  PQSF does not define or secure transport protocols themselves.
+
+- **Key compromise or runtime compromise:**  
+  Key management and runtime integrity are outside PQSF’s scope.
+
+- **Denial-of-service attacks:**  
+  PQSF prioritizes correctness and determinism over availability.
+
+---
+
+### Authority Boundary
+
+PQSF grants no authority and performs no enforcement.
+
+It defines protocol rules and primitives only. Any authority or decision
+derived from PQSF artefacts is the responsibility of consuming
+specifications.
+
+---
+
+### Fail-Closed Semantics
+
+PQSF itself does not permit or deny operations.
+
+However, consuming systems MUST:
+- reject non-canonical encodings
+- reject unverifiable signatures or hashes
+- reject artefacts that do not conform to declared profiles
+
+Failure to meet PQSF rules MUST be treated as a hard failure by
+consumers.
+
+---
+
+### Fuzzing and Structural Attack Resistance
+
+Canonical encoding requirements eliminate structural fuzzing attack
+classes that rely on ambiguous or inconsistent representations.
+
+The following attack vectors are structurally mitigated:
+
+- **Parser differentials:**  
+  Semantically identical inputs MUST canonicalize to a single byte
+  representation or be rejected. Multiple interpretations are forbidden.
+
+- **Hash and signature mismatch attacks:**  
+  All hashing and signing operations are performed over canonical bytes
+  only. Re-encoding between parse and verification is forbidden.
+
+- **Encoding variance attacks:**  
+  Alternate CBOR encodings (long-form integers, indefinite-length items,
+  unsorted maps) MUST be rejected deterministically.
+
+- **Floating-point representation attacks:**  
+  Floating-point values are prohibited entirely, eliminating NaN,
+  signed-zero, and subnormal representation variance.
+
+- **Unicode normalization ambiguity:**  
+  Canonical encodings operate on byte sequences. No implicit Unicode
+  normalization is permitted at the protocol layer.
+
+As a result, fuzzing inputs collapse to one of two outcomes:
+- a single canonical byte representation, or
+- deterministic rejection.
+
+No degraded, heuristic, or best-effort parsing is permitted for
+PQSF-governed artefacts.
+
+---
+
+## 32. Conformance Checklist
+
+An implementation is PQSF conformant if it satisfies all REQUIRED items
+below and documents any OPTIONAL features it claims to support.
+
+### Required (MUST)
+
+☐ Enforces deterministic canonical encoding for all PQSF-governed artefacts  
+☐ Produces byte-identical encodings for semantically identical input  
+☐ Rejects all non-canonical encodings deterministically  
+☐ Rejects floating-point values in all canonical artefacts  
+☐ Enforces shortest encoding form for all CBOR primitives  
+☐ Enforces deterministic map key ordering (bytewise lexicographic)  
+☐ Validates schema compliance before hashing or signing  
+☐ Computes hashes and signatures over canonical bytes only  
+☐ Enforces CryptoSuiteProfile pinning and validation  
+☐ Provides exporter binding primitives suitable for session binding  
+
+### Conditional (MUST if applicable)
+
+☐ If CBOR is used, rejects indefinite-length items  
+☐ If JSON is permitted, enforces the specified canonical JSON profile  
+☐ If exporter binding is used, produces stable exporter material per session  
+☐ If profile governance metadata is present, enforces version and rollback rules  
+
+### Recommended (SHOULD)
+
+☐ Uses independent encoder/decoder implementations for cross-checking  
+☐ Fuzz-tests decoders with malformed and non-canonical inputs  
+☐ Logs canonicalization failures with deterministic error codes  
+☐ Monitors profile usage and deprecation status  
+☐ Maintains a registry of accepted and revoked profiles  
+
+### Optional (MAY)
+
+☐ Provides tooling to canonicalize and inspect artefacts  
+☐ Provides reference test vectors for encoders and decoders  
+☐ Supports multiple profile registries (e.g., offline mirrors)  
+
+### Testing
+
+☐ Demonstrates re-encoding stability (decode → encode → identical bytes)  
+☐ Demonstrates rejection of non-canonical CBOR forms  
+☐ Demonstrates rejection of floating-point encodings  
+☐ Demonstrates cross-implementation encoding equivalence  
+☐ Demonstrates correct exporter material derivation (where applicable)  
+
+### Documentation
+
+☐ Documents canonical encoding rules and exceptions  
+☐ Documents supported CryptoSuiteProfiles and minimum versions  
+☐ Documents exporter binding interfaces and expectations  
+☐ Provides a conformance statement with version numbers  
+
+---
+
+## 33. Annexes (Non Normative)
+
+### Annex A – Canonical CBOR Profile Summary
+
+The PQSF strict CBOR profile enforces:
+
+* Deterministic encoding per RFC 8949 §4.2
+* Shortest integer form
+* No floating point values
+* No indefinite-length items
+* Unique map keys
+* Lexicographic key ordering
+* No CBOR tags unless explicitly profiled by consuming specifications
+
+---
+
+### Annex B – Example CryptoSuiteProfile
+
+```json
 {
-  "event": "auth_login",
-  "tick": <tick>,
-  "payload": {
-    "intent_id": "<id>",
-    "service_id": "<service>",
-    "user_pub": "<public-key-fingerprint>"
-  }
+  "profile_id": "pqsf:crypto:hash:shake256-v1",
+  "suite_class": "hash",
+  "family": "SHAKE",
+  "parameters": {
+    "output_bits": 256
+  },
+  "domain_set_id": "pqsf-domain-v2",
+  "test_vector_hash": "01ab...",
+  "valid_from_tick": 0,
+  "valid_until_tick": null,
+  "revoked": false,
+  "signature": "02cd..."
 }
 ```
 
-If any check fails, the service MUST reject the login and MUST NOT create or resume a user session.
-
-## **N.5 Session Binding and Logout (Normative)**
-
-1. The relying service MUST bind its application session identifier to `user_pub` and `exporter_hash`.
-
-2. Session resumption MUST require:
-
-   * a fresh EpochTick,
-   * a valid exporter_hash,
-   * a stored binding to `user_pub`.
-
-3. Logout operations SHOULD be recorded as ledger events with `event = "auth_logout"` but MAY be handled purely at the application layer.
-
-4. Session cookies or tokens MUST NOT be treated as primary credentials and MUST be considered valid only in combination with the WalletLoginAssertion binding.
-
-## **N.6 Security Properties (Informative)**
-
-Wallet-backed login under this annex provides:
-
-* **Passwordless authentication**
-  No reusable password or shared secret is needed. The wallet acts as the authentication authority.
-
-* **Replay resistance**
-  EpochTick freshness, `nonce`, and exporter_hash prevent replay of login assertions.
-
-* **Phishing resistance**
-  ConsentProof binds the login to a specific service and session. A malicious site cannot reuse a login created for a different service_id or exporter_hash.
-
-* **Upgrade path for identity**
-  KYCCredential and KYCDisclosure under Annex K can be attached via `credential_ref` without exposing unnecessary identity attributes.
-
-* **Separation from custody keys**
-  Authentication keys are derived from dedicated non-custodial classes and never share material with PQHD custody keys.
-
 ---
 
-# **ANNEX O — SOFTWARE ENFORCEMENT PROFILE (NORMATIVE)**
+### Annex C – Reference Pseudocode (PQSF-Native)
 
-## **O.1 Scope**
+```python
+def canonical_hash_cbor(obj, profile):
+    """Hash a PQSF-native object."""
+    bytes = canonical_cbor_encode(obj)
+    return hash_with_profile(profile, bytes)
 
-This annex defines the requirements for any **software implementation** acting as a PQSF enforcement point. It specifies how software MUST implement, evaluate, and fail-closed on the PQSF Predicate Model.
+def sign_cbor(obj, profile, sk):
+    """Sign a PQSF-native object."""
+    payload = canonical_cbor_encode(obj)
+    return sign_with_profile(profile, sk, payload)
 
-Software in scope includes:
-
-* wallets and custody applications
-* local agents and daemons
-* operating-system services, microkernels
-* AI runtimes and orchestration layers
-* cloud services performing PQSF-governed operations
-
-Where this annex conflicts with informative content, **this annex prevails**.
-
----
-
-## **O.2 Predicate Model Overview (Informative)**
-
-PQSF defines six core predicates:
-
-* **`valid_tick`** — Temporal Authority
-* **`valid_consent`** — Intent Authority
-* **`valid_policy`** — Policy Authority
-* **`valid_runtime`** — Integrity Authority (PQVL)
-* **`valid_quorum`** — Multi-Party Authority
-* **`valid_structure`** — Structural/Schema Authority
-
-These compose:
-
-```
-valid_for_execution =
-      valid_tick
-  AND valid_consent
-  AND valid_policy
-  AND valid_runtime
-  AND valid_quorum
-  AND valid_structure
+def verify_cbor(obj, profile, pk, sig):
+    """Verify signature on a PQSF-native object."""
+    payload = canonical_cbor_encode(obj)
+    return verify_with_profile(profile, pk, payload, sig)
 ```
 
 ---
 
-## **O.3 Conformant Software Roles**
+### Annex D – Reference Pseudocode (Epoch Clock Binding)
 
-A conformant software implementation MUST implement at least:
+```python
+def epochclock_hash_tick_bytes(tick_json_jcs_bytes, hash_profile):
+    """Hash Epoch Clock tick bytes (already in JCS JSON form)."""
+    return hash_with_profile(hash_profile, tick_json_jcs_bytes)
 
-* **Local Enforcement Agent**, or
-* **Remote Enforcement Service**, or
-* **Orchestration Layer**.
-
-Multiple roles MAY coexist in one implementation.
-
----
-
-## **O.4 Predicate Evaluation Requirements**
-
-Software MUST:
-
-1. Evaluate all PQSF predicates per-operation.
-2. Treat the following as `predicate = false`:
-
-   * false outcome
-   * missing/ambiguous input
-   * stale tick
-   * signature errors
-   * PQVL `WARNING` or `CRITICAL` drift
-3. Evaluate predicates **atomically** for each operation.
-4. Reject alternative or implicit authorisation paths.
-5. NOT reuse cached predicate results across unrelated operations.
+def bind_time_by_tick_hash(pqsf_obj, tick_hash):
+    """Bind a PQSF object to time via Epoch Clock tick hash."""
+    pqsf_obj["epoch_tick_hash"] = tick_hash
+    return pqsf_obj
+```
 
 ---
 
-## **O.5 Time & Freshness (`valid_tick`)**
+### Annex E – Replay Safety Checklist
 
-Software MUST:
+For replay-safe artefact design:
 
-* verify EpochTick signature (ML-DSA-65),
-* enforce monotonicity per authority context,
-* enforce freshness ≤900 seconds (unless stricter policy applies),
-* treat verification failure as `valid_tick = false`,
-* NEVER fall back to system time.
-
-Multi-context deployments MUST maintain independent monotonicity counters.
-
----
-
-## **O.6 Consent & UI Binding (`valid_consent`)**
-
-Software MUST:
-
-* construct canonical ConsentProof objects,
-* bind consent to the exact operation, tick, exporter_hash, and any runtime state,
-* reject malformed, expired, or mismatched ConsentProof,
-* treat consent as single-use unless an explicit multi-use policy is defined.
+* ☐ intent_hash bound
+* ☐ session_id bound
+* ☐ exporter_hash bound (for Authoritative)
+* ☐ issued_tick and expiry_tick present
+* ☐ single-use enforced by consumer where required
+* ☐ decision_id or operation_id unique per attempt
+* ☐ nonce present for challenge-response patterns
 
 ---
 
-## **O.7 Policy (`valid_policy`)**
+### Annex F – Privacy Policy Namespace
 
-Software MUST:
+Privacy policies MAY be represented as PolicyObject instances using the `privacy:` namespace.
 
-* evaluate all thresholds, allowlists, denylists, time windows, constraints,
-* reject ambiguous policy outcomes,
-* freeze policy during evaluation; modifications require new consent.
+**Recommended policy_id values:**
 
----
+* `privacy:retention:v1` - Data retention policies
+* `privacy:logging:v1` - Logging and audit policies
+* `privacy:disclosure:v1` - Data disclosure policies
+* `privacy:telemetry:v1` - Telemetry and metrics policies
+* `privacy:bundle:v1` - Bundled privacy policy suite
 
-## **O.8 Runtime Integrity (`valid_runtime`)**
+**Recommended artefact class identifiers within privacy policy bodies:**
 
-When PQVL is present, software MUST:
+* `consent` - Consent artefacts
+* `policy` - Policy objects themselves
+* `attestation` - Attestation envelopes
+* `ledger` - Ledger entries
+* `session` - Session data
+* `model` - AI model artefacts
+* `prompt` - User prompts and AI outputs
+* `export` - Data exports
 
-* consume AttestationEnvelope,
-* treat `drift_state = WARNING/CRITICAL` as `valid_runtime = false` for high-risk operations,
-* require fresh attestation when policy mandates it.
-
-Without PQVL, software MUST operate in a documented “runtime-blind” profile or refuse high-risk operations.
-
----
-
-## **O.9 Quorum (`valid_quorum`)**
-
-Software MUST:
-
-* represent quorum explicitly,
-* verify all approvals,
-* reject revoked/stale/missing approvals,
-* enforce that no single compromised component can satisfy quorum unless explicitly permitted.
+This annex is informative only. Consuming specifications define which identifiers are required or meaningful.
 
 ---
 
-## **O.10 Structure & Ledger Binding (`valid_structure`)**
+### Annex G – STP Session Lifecycle Example
 
-Software MUST:
-
-* validate operation/PSBT/message structure,
-* validate resource/ledger/domain correctness,
-* reject incorrect/malformed structures.
-
----
-
-## **O.11 Fail-Closed Requirements**
-
-Software MUST:
-
-* treat **any error** in predicate evaluation as a hard denial,
-* avoid silent downgrade,
-* log predicate-level failure codes for audit.
-
----
-
-## **O.12 Software Interaction with Hardware**
-
-Where PQSF-conformant hardware is present:
-
-* mandatory hardware predicates MUST be delegated,
-* hardware refusal MUST be treated as `valid_for_execution = false`,
-* bypassing hardware is forbidden except in explicit degraded-mode configurations.
+```
+Client                                  Server
+  |                                       |
+  |--- STP-INIT -----------------------> |
+  |    {session_id: "abc", nonce: ...}   |
+  |                                       |
+  | <-- STP-ACCEPT ----------------------|
+  |     {session_id: "abc",              |
+  |      exporter_hash: ...}             |
+  |                                       |
+  |--- Encrypted Application Data -----> |
+  | <-- Encrypted Application Data ------|
+  |                                       |
+  |--- STP-RESUME (later) --------------> |
+  |    {previous_session_id: "abc"}      |
+  |                                       |
+  | <-- STP-ACCEPT or STP-ERROR ---------|
+```
 
 ---
 
-# **ANNEX P — HARDWARE ENFORCEMENT PROFILE (NORMATIVE)**
+## Annex H — KeyMail (Informative)
 
-## **P.1 Scope**
+### H.1 Scope
 
-This annex defines requirements for any **hardware component** acting as a PQSF enforcement point or root of authority.
+KeyMail defines secure, non-authoritative messaging artefacts for use
+within the PQ stack. KeyMail provides confidentiality and integrity for
+message exchange only and carries no execution, authority, or consent
+semantics.
 
-Hardware includes secure enclaves, TPM-like modules, HSMs, microkernels/separation kernels, HAP devices, or embedded controllers executing PQSF operations.
+KeyMail artefacts:
 
----
+* MUST NOT trigger execution
+* MUST NOT propagate authority
+* MUST NOT be consumed by PQSEC as action predicates
+* MUST NOT be interpreted as consent, authorization, enforcement
+  outcomes, or execution capability
 
-## **P.2 General Requirements**
-
-Hardware MUST:
-
-* provide a protected execution environment,
-* expose a verifiable PQSF interface,
-* support ML-DSA-65 key generation, storage, signing,
-* fail-closed on tamper or internal error,
-* never export private key material.
-
----
-
-## **P.3 Mandatory Hardware-Enforced Predicates**
-
-Hardware acting as an enforcement point MUST enforce:
-
-* **`valid_tick`** — verify ticks, monotonicity, freshness,
-* **`valid_policy`** — where policy is representable in hardware (limits, schedules),
-* **`valid_quorum`** — threshold keys / multi-device approvals,
-* **Key-use gating** — signing MUST only proceed when `valid_for_execution = true`.
-
-Hardware MAY delegate:
-
-* consent,
-* runtime integrity,
-* portions of structure-validation,
-
-**but only over authenticated, integrity-protected channels**.
+KeyMail is explicitly out of scope for enforcement, admission, refusal,
+or escalation logic.
 
 ---
 
-## **P.4 Tick Handling**
+### H.2 KeyMailEnvelope
 
-Hardware MUST:
+```
 
-* verify EpochTick via ML-DSA-65,
-* maintain a non-resettable monotonic counter per context,
-* reject stale, malformed, replayed ticks,
-* treat tick verification failure as hard denial.
+KeyMailEnvelope = {
+message_id: tstr,
+sender_identity_ref: tstr,
+recipient_identity_ref: tstr,
+ciphertext: bstr,
+issued_tick: uint,
+expiry_tick: uint,
+suite_profile: tstr
+}
 
-Hardware MUST NOT expose trust anchors to software.
-
----
-
-## **P.5 Key Management & Signing**
-
-Hardware MUST:
-
-* generate and store ML-DSA-65 keys internally,
-* gate signing on full predicate satisfaction,
-* require predicate results or a verified decision token per operation,
-* re-compute or verify predicate outcomes before signing.
-
-Signing MUST NOT occur on authenticated software request alone.
+```
 
 ---
 
-## **P.6 Runtime Attestation (`valid_runtime`)**
+### H.3 Rules
 
-Where supported, hardware MUST:
-
-* measure runtime state,
-* report `drift_state` via AttestationEnvelope,
-* enforce:
-
-  * NONE → allow,
-  * WARNING → restrict per profile,
-  * CRITICAL → deny high-risk operations.
-
-If attestation is unsupported, hardware MUST declare this and MUST NOT assert drift-free state.
+1. KeyMailEnvelope MUST be canonically encoded under PQSF canonical
+   encoding rules.
+2. KeyMailEnvelope.ciphertext MUST be produced using authenticated
+   encryption under the referenced suite_profile.
+3. issued_tick and expiry_tick MUST be present and MUST be enforced by
+   consuming systems. Expired KeyMailEnvelope artefacts MUST be rejected.
+4. KeyMailEnvelope carries no authority and MUST NOT be treated as an
+   execution, permission, enforcement, or predicate signal by any
+   consuming specification, including PQSEC.
 
 ---
 
-## **P.7 Interface Integrity**
+### Annex I – EBT Encryption Flow Example
 
-Hardware MUST:
-
-* authenticate and integrity-protect communication with software,
-* reject malformed or replayed messages,
-* provide explicit, verifiable status codes,
-* never silently downgrade enforcement.
-
----
-
-## **P.8 Tamper Detection & Fail-Closed**
-
-Hardware MUST:
-
-* zeroise key material or disable operations on tamper,
-* report tamper to software (mapped to `valid_runtime = false`),
-* refuse PQSF-governed operations while tamper is active.
-
----
-
-## **P.9 Capability Profiles**
-
-Hardware MAY declare capability profiles:
-
-* **Key-Only Enforcement**,
-* **Full Predicate Enforcement**,
-* **Attestation-First**.
-
-Regardless of profile:
-
-* advertised predicates MUST match actual behaviour,
-* operations requiring unsupported predicates MUST be denied.
-
----
-
-## **P.10 Interaction with Software**
-
-Hardware MUST enforce predicate rules deterministically and MAY reject operations that violate:
-
-* time,
-* policy,
-* quorum,
-* ledger structure,
-* or runtime state.
-
-Software MUST treat such rejections as authoritative.
+```python
+def ebt_encrypt(plaintext: bytes, label: str, root_seed: bytes, context: dict):
+    """
+    Encrypt plaintext using EBT pattern.
+    """
+    # Derive EBT key
+    ebt_key = cSHAKE256(
+        root_seed,
+        domain=f"PQSF-EBT:{label}",
+        input=canonical_encode(context)
+    )
+    
+    # Generate nonce
+    nonce = os.urandom(12)  # 96 bits for AES-GCM
+    
+    # Prepare AAD
+    aad = canonical_encode({
+        "label": label,
+        "context": context
+    })
+    
+    # Encrypt
+    ciphertext, tag = aes_256_gcm_encrypt(
+        key=ebt_key,
+        nonce=nonce,
+        plaintext=plaintext,
+        aad=aad
+    )
+    
+    # Return EBTEnvelope
+    return {
+        "label": label,
+        "suite_profile": "pqsf:aead:aes-256-gcm:v1",
+        "nonce": nonce,
+        "aad": aad,
+        "ciphertext": ciphertext,
+        "tag": tag
+    }
+```
 
 ---
 
-## **P.11 Deterministic Behaviour**
+### Annex J – Exporter Hash Derivation Example
 
-Hardware MUST produce:
-
-* canonical predicate outcomes,
-* reproducible error codes,
-* deterministic signing results over canonical operation objects.
-
-Non-determinism is forbidden for any security-relevant operation.
+```python
+def derive_exporter_hash(tls_session, session_id: str, role_id: str, operation_class: str):
+    """
+    Derive exporter hash from TLS session.
+    """
+    context = canonical_cbor_encode({
+        "pqsf_version": "2.0.2",
+        "session_id": session_id,
+        "role_id": role_id,
+        "operation_class": operation_class
+    })
+    
+    # TLS 1.3 exporter
+    exporter_hash = tls_exporter(
+        session=tls_session,
+        label="PQSF-EXPORTER",
+        context=context,
+        length=32  # 256 bits
+    )
+    
+    return exporter_hash
+```
 
 ---
 
-## **Acknowledgements (Informative)**
+### Annex K – Merkle Tree Construction Example
 
-This specification acknowledges the foundational contributions of:
-
-Peter Shor, whose discovery of Shor’s algorithm motivates the transition to post-quantum security models.
-
-Ralph Merkle, originator of Merkle tree constructions, which influence deterministic ledger structures.
-
-Joan Daemen and Vincent Rijmen, for their work leading to the AES family and the design lineage that informed sponge-based hashing.
-
-Guido Bertoni, Joan Daemen, Michaël Peeters, and Gilles Van Assche, inventors of Keccak, from which SHAKE256 and cSHAKE256 are derived.
-
-Their work provides essential primitives underpinning PQSF’s deterministic, post-quantum-secure architecture.
+```python
+def build_merkle_tree(ledger_entries: list) -> bytes:
+    """
+    Build Merkle tree from ledger entries and return root hash.
+    """
+    from hashlib import shake_256
+    
+    def shake256_256(data: bytes) -> bytes:
+        return shake_256(data).digest(32)
+    
+    def leaf_hash(entry: dict) -> bytes:
+        canonical_bytes = canonical_cbor_encode(entry)
+        return shake256_256(b'\x00' + canonical_bytes)
+    
+    def node_hash(left: bytes, right: bytes) -> bytes:
+        return shake256_256(b'\x01' + left + right)
+    
+    # Build leaf layer
+    current_level = [leaf_hash(entry) for entry in ledger_entries]
+    
+    # Build tree bottom-up
+    while len(current_level) > 1:
+        next_level = []
+        
+        # Process pairs
+        for i in range(0, len(current_level), 2):
+            left = current_level[i]
+            
+            # Handle odd number of nodes (duplicate last)
+            if i + 1 < len(current_level):
+                right = current_level[i + 1]
+            else:
+                right = left  # Duplicate last node
+            
+            next_level.append(node_hash(left, right))
+        
+        current_level = next_level
+    
+    return current_level[0]  # Root hash
+```
 
 ---
 
-If you find this work useful and want to support it, you can do so here:
-bc1q380874ggwuavgldrsyqzzn9zmvvldkrs8aygkw
+### Annex L – PolicyBundle Validation Example
+
+```python
+def validate_policy_bundle(bundle: dict, governance_pubkeys: dict, current_tick: int):
+    """
+    Validate a PolicyBundle structure and signatures.
+    Returns True if valid, False otherwise.
+    """
+    # 1. Validate structure
+    required_fields = ["bundle_id", "policy", "issued_tick", "governance", "suite_profile", "signature"]
+    if not all(field in bundle for field in required_fields):
+        return False
+    
+    # 2. Validate PolicyObject
+    policy = bundle["policy"]
+    if not validate_policy_object(policy):
+        return False
+    
+    # 3. Check tick freshness (if required by policy)
+    if bundle["issued_tick"] > current_tick:
+        return False  # Future-dated
+    
+    # 4. Validate governance signatures
+    governance = bundle["governance"]
+    threshold = governance["threshold"]
+    signers = governance["signers"]
+    
+    # Bundle must be signed by threshold signers
+    valid_sigs = 0
+    for signer_id in signers:
+        if signer_id in governance_pubkeys:
+            # Reconstruct canonical payload
+            payload = canonical_cbor_encode({
+                "bundle_id": bundle["bundle_id"],
+                "policy": bundle["policy"],
+                "issued_tick": bundle["issued_tick"],
+                "exporter_hash": bundle.get("exporter_hash"),
+                "governance": bundle["governance"],
+                "suite_profile": bundle["suite_profile"]
+            })
+            
+            # Verify signature (implementation-specific)
+            if verify_signature(
+                pubkey=governance_pubkeys[signer_id],
+                payload=payload,
+                signature=bundle["signature"],
+                profile=bundle["suite_profile"]
+            ):
+                valid_sigs += 1
+    
+    return valid_sigs >= threshold
+
+def validate_policy_object(policy: dict) -> bool:
+    """
+    Validate PolicyObject structure and hash.
+    """
+    if not all(field in policy for field in ["policy_id", "policy_body", "policy_hash"]):
+        return False
+    
+    # Recompute policy_hash
+    body_bytes = canonical_cbor_encode(policy["policy_body"])
+    computed_hash = shake256_256(body_bytes)
+    
+    return computed_hash == policy["policy_hash"]
+```
+
+---
+
+### Annex M – Profile Update Acceptance Logic
+
+```python
+def should_accept_profile_update(
+    current_profile: dict,
+    update: dict,
+    governance_pubkeys: dict,
+    current_tick: int
+) -> tuple[bool, str]:
+    """
+    Determine if a ProfileUpdate should be accepted.
+    Returns (accept: bool, reason: str).
+    """
+    new_profile = update["profile"]
+    
+    # 1. Verify governance signatures
+    required_sigs = len(governance_pubkeys) // 2 + 1  # M-of-N majority
+    valid_sigs = 0
+    
+    for sig_entry in update["governance_sigs"]:
+        signer_id = sig_entry["signer_id"]
+        sig = sig_entry["sig"]
+        
+        if signer_id in governance_pubkeys:
+            payload = canonical_cbor_encode(new_profile)
+            if verify_signature(governance_pubkeys[signer_id], payload, sig):
+                valid_sigs += 1
+    
+    if valid_sigs < required_sigs:
+        return False, f"Insufficient signatures: {valid_sigs}/{required_sigs}"
+    
+    # 2. Check activation time
+    if new_profile["valid_from_tick"] > current_tick:
+        return False, "Update is future-dated, not yet valid"
+    
+    # 3. Check for downgrade
+    if is_downgrade(current_profile, new_profile):
+        return False, "Profile update is a security downgrade"
+    
+    # 4. Check revocation status
+    if new_profile.get("revoked", False):
+        return False, "New profile is already revoked"
+    
+    return True, "Profile update accepted"
+
+def is_downgrade(old_profile: dict, new_profile: dict) -> bool:
+    """
+    Check if new_profile is a security downgrade from old_profile.
+    """
+    # Check suite class consistency
+    if old_profile["suite_class"] != new_profile["suite_class"]:
+        return True  # Cannot change suite class
+    
+    # Algorithm family checks
+    old_family = old_profile["family"]
+    new_family = new_profile["family"]
+    
+    # PQ to classical is downgrade
+    pq_families = ["ML-DSA", "ML-KEM", "SHAKE"]
+    classical_families = ["ECDSA", "RSA", "SHA"]
+    
+    if old_family in pq_families and new_family in classical_families:
+        return True
+    
+    # Check parameter strength (implementation-specific)
+    # For example, ML-DSA-87 -> ML-DSA-65 is downgrade
+    if old_family == new_family:
+        old_strength = get_security_strength(old_profile)
+        new_strength = get_security_strength(new_profile)
+        if new_strength < old_strength:
+            return True
+    
+    return False
+```
+
+---
+
+### Annex N – Emergency Transition State Machine
+
+```
+Normal Operation
+       |
+       | (algorithm compromise detected)
+       v
+Emergency Profile Issued
+       |
+       | (governance signatures verified)
+       v
+Phase 1: Dual-Algorithm Mode (Days 0-7)
+       | - Accept both old and new algorithms
+       | - Log all uses of old algorithm
+       | - Warn users
+       |
+       | (Day 7 reached)
+       v
+Phase 2: Authoritative Restriction (Days 7-30)
+       | - Reject old algorithm for Authoritative ops
+       | - Accept for Non-Authoritative ops only
+       | - Escalate warnings
+       |
+       | (Day 30 reached)
+       v
+Phase 3: Complete Deprecation
+       | - Reject old algorithm for all operations
+       | - Remove from codebase
+       |
+       v
+New Normal Operation
+```
+
+---
+
+### Annex O – STP Capability Negotiation Example
+
+```python
+def negotiate_capabilities(client_caps: list[str], server_caps: list[str]) -> dict:
+    """
+    Negotiate session capabilities between client and server.
+    """
+    # Required capabilities that must be present
+    required = ["pqsf-v2", "cbor-canonical", "ml-dsa-65"]
+    
+    # Compute intersection
+    agreed_caps = set(client_caps) & set(server_caps)
+    
+    # Check required capabilities
+    if not all(req in agreed_caps for req in required):
+        return {
+            "success": False,
+            "error": "E_CAPABILITY_MISMATCH",
+            "missing": [req for req in required if req not in agreed_caps]
+        }
+    
+    # Optional capabilities
+    optional = {
+        "compression": ["gzip", "zstd"],
+        "extensions": ["batch-ops", "streaming"]
+    }
+    
+    negotiated = {
+        "success": True,
+        "required": required,
+        "optional": {}
+    }
+    
+    # Negotiate optional features
+    for feature, options in optional.items():
+        for opt in options:
+            cap_name = f"{feature}:{opt}"
+            if cap_name in agreed_caps:
+                if feature not in negotiated["optional"]:
+                    negotiated["optional"][feature] = []
+                negotiated["optional"][feature].append(opt)
+    
+    return negotiated
+```
+
+---
+
+### Annex P – ConsentProof Construction Example
+
+```python
+def create_consent_proof(
+    action: str,
+    intent: dict,
+    session_id: str,
+    exporter_hash: bytes,
+    issuer_sk,
+    current_tick: int,
+    validity_duration: int = 900  # 15 minutes
+) -> dict:
+    """
+    Create a ConsentProof artefact.
+    """
+    import os
+    from hashlib import shake_256
+    
+    # Compute intent hash
+    intent_bytes = canonical_cbor_encode(intent)
+    intent_hash = shake_256(intent_bytes).digest(32)
+    
+    # Generate unique consent_id
+    consent_id = os.urandom(16).hex()
+    
+    # Construct ConsentProof payload
+    consent_proof = {
+        "action": action,
+        "intent_hash": intent_hash,
+        "issued_tick": current_tick,
+        "expiry_tick": current_tick + validity_duration,
+        "session_id": session_id,
+        "exporter_hash": exporter_hash,
+        "consent_id": consent_id,
+        "suite_profile": "pqsf:sig:ml-dsa-65:v1"
+    }
+    
+    # Sign the payload
+    payload_bytes = canonical_cbor_encode(consent_proof)
+    signature = ml_dsa_65_sign(issuer_sk, payload_bytes)
+    
+    consent_proof["signature"] = signature
+    
+    return consent_proof
+```
+
+---
+
+### Annex Q – LedgerEntry Chain Validation
+
+```python
+def validate_ledger_chain(entries: list[dict]) -> tuple[bool, str]:
+    """
+    Validate a chain of ledger entries.
+    Returns (valid: bool, error_message: str).
+    """
+    if not entries:
+        return False, "Empty ledger"
+    
+    # Genesis entry validation
+    genesis = entries[0]
+    if genesis["prev_hash"] != b'\x00' * 32:  # Assuming zero hash for genesis
+        return False, "Invalid genesis prev_hash"
+    
+    # Validate chain continuity
+    for i in range(1, len(entries)):
+        current = entries[i]
+        previous = entries[i - 1]
+        
+        # Compute hash of previous entry
+        prev_payload = canonical_cbor_encode({
+            "event": previous["event"],
+            "tick": previous["tick"],
+            "payload": previous["payload"],
+            "prev_hash": previous["prev_hash"]
+        })
+        computed_prev_hash = shake256_256(prev_payload)
+        
+        # Check prev_hash reference
+        if current["prev_hash"] != computed_prev_hash:
+            return False, f"Chain break at entry {i}: prev_hash mismatch"
+        
+        # Check monotonicity
+        if current["tick"] < previous["tick"]:
+            return False, f"Non-monotonic tick at entry {i}"
+        
+        # Verify signature
+        if not verify_ledger_signature(current):
+            return False, f"Invalid signature at entry {i}"
+    
+    return True, "Ledger chain valid"
+
+def verify_ledger_signature(entry: dict) -> bool:
+    """
+    Verify signature on a ledger entry.
+    """
+    payload = canonical_cbor_encode({
+        "event": entry["event"],
+        "tick": entry["tick"],
+        "payload": entry["payload"],
+        "prev_hash": entry["prev_hash"]
+    })
+    
+    return verify_signature(
+        pubkey=get_ledger_pubkey(entry["suite_profile"]),
+        payload=payload,
+        signature=entry["signature"],
+        profile=entry["suite_profile"]
+    )
+```
+
+---
+
+### Annex R – RecoveryCapsule Activation Logic
+
+```python
+def can_activate_recovery(
+    capsule: dict,
+    current_tick: int,
+    guardian_approvals: list[str]
+) -> tuple[bool, str]:
+    """
+    Check if a RecoveryCapsule can be activated.
+    """
+    # 1. Check valid_from_tick
+    if current_tick < capsule["valid_from_tick"]:
+        return False, "Recovery period has not started"
+    
+    # 2. Check recovery_delay
+    activation_tick = capsule["creation_tick"] + capsule["recovery_delay"]
+    if current_tick < activation_tick:
+        remaining = activation_tick - current_tick
+        return False, f"Recovery delay not elapsed (remaining: {remaining} ticks)"
+    
+    # 3. Check guardian threshold
+    required_guardians = capsule["threshold"]
+    guardian_set = set(capsule["guardian_set"])
+    
+    # Verify approvals are from valid guardians
+    valid_approvals = [g for g in guardian_approvals if g in guardian_set]
+    
+    if len(valid_approvals) < required_guardians:
+        return False, f"Insufficient guardian approvals: {len(valid_approvals)}/{required_guardians}"
+    
+    return True, "Recovery can proceed"
+```
+
+---
+
+### Annex S – Test Vector Checklist
+
+For PQSF conformance testing, implementations MUST provide test vectors demonstrating:
+
+**Canonical Encoding:**
+* ☐ CBOR encoding round-trip (encode → decode → encode produces identical bytes)
+* ☐ Rejection of non-canonical CBOR (wrong integer encoding, unsorted maps, etc.)
+* ☐ JCS JSON handling for Epoch Clock artefacts
+
+**Cryptographic Operations:**
+* ☐ Hash reproducibility (same input → same hash across implementations)
+* ☐ Signature verification (valid signatures accepted, invalid rejected)
+* ☐ Exporter hash derivation (consistent across sessions)
+
+**Profile Management:**
+* ☐ Profile update acceptance (valid updates accepted)
+* ☐ Downgrade rejection (security downgrades rejected)
+* ☐ Revocation enforcement (revoked profiles rejected)
+* ☐ Emergency transition (phased deprecation works correctly)
+
+**Object Validation:**
+* ☐ PolicyBundle validation (structure, hash, signatures)
+* ☐ ConsentProof validation (structure, binding, freshness)
+* ☐ LedgerEntry chain validation (continuity, monotonicity)
+
+**Merkle Tree Construction:**
+* ☐ Root hash reproducibility (same entries → same root)
+* ☐ Odd-node handling (consistent across implementations)
+
+**EBT Encryption:**
+* ☐ Key derivation determinism (same inputs → same key)
+* ☐ Nonce uniqueness enforcement
+* ☐ AEAD correctness (encrypt/decrypt round-trip)
+
+**STP Protocol:**
+* ☐ Message structure validation
+* ☐ Capability negotiation correctness
+* ☐ Session resumption handling
+
+---
+
+### Annex T – Performance Optimization Guidelines
+
+While PQSF does not define performance requirements, the following optimizations are recommended:
+
+**Caching Strategies:**
+1. **Profile Cache:** Cache validated CryptoSuiteProfiles by profile_id
+2. **Hash Cache:** Cache frequently computed hashes (e.g., policy_hash)
+3. **Signature Verification:** Cache verified signatures within freshness window
+
+**Parallelization Opportunities:**
+1. **Independent Signature Verification:** Verify multiple signatures in parallel
+2. **Merkle Tree Construction:** Build subtrees in parallel
+3. **Profile Updates:** Check multiple governance signatures concurrently
+
+**Lazy Evaluation:**
+1. **Profile Discovery:** Only fetch profiles when needed
+2. **Revocation Checks:** Cache revocation list, update periodically
+3. **Capability Negotiation:** Defer optional feature setup until used
+
+**Memory Management:**
+1. **Canonical Encoding:** Reuse encoding buffers where safe
+2. **Merkle Trees:** Stream large ledgers rather than loading entirely
+3. **EBT Envelopes:** Encrypt/decrypt in streaming mode for large payloads
+
+---
+
+### Annex U – Security Considerations Summary
+
+**Critical Security Properties:**
+
+1. **Canonical Encoding is Non-Negotiable**
+   - Non-canonical encodings create hash ambiguity
+   - Implementations MUST reject any non-canonical input
+
+2. **Profile Downgrade Prevention**
+   - Never accept weaker cryptography
+   - Emergency transitions are the ONLY exception
+
+3. **Exporter Binding for Authoritative Operations**
+   - Session binding prevents cross-session replay
+   - Null exporter_hash for Authoritative ops is a vulnerability
+
+4. **Signature Verification Order**
+   - Verify structure BEFORE cryptographic operations
+   - Avoids expensive operations on malformed inputs
+
+5. **Time Binding via Epoch Clock**
+   - Never trust system clocks
+   - Always consume externally signed ticks
+
+6. **Ledger Continuity**
+   - prev_hash chain prevents insertion/deletion
+   - Monotonic ticks prevent reordering
+
+**Common Implementation Mistakes:**
+
+* Re-encoding Epoch Clock artefacts (breaks signature verification)
+* Accepting unsigned or self-signed profiles
+* Allowing null exporter_hash for Authoritative operations
+* Trusting system time instead of Epoch Clock
+* Not checking revocation before profile use
+* Reusing nonces in EBT encryption
+
+---
+
+# Annex V — KeyMail: Secure Messaging Artefacts (Normative)
+
+This annex defines secure, non-authoritative messaging artefacts for the PQ ecosystem.
+
+---
+
+## V.1 Scope and Authority Boundary
+
+KeyMail defines canonically encoded, encrypted message artefacts for secure communication between PQ-aware endpoints.
+
+**KeyMail provides:**
+- End-to-end encrypted message envelopes
+- Sender and recipient identity binding
+- Time-bounded message validity
+- Optional session binding for conversational contexts
+- Thread continuity for multi-message exchanges
+
+**Authority Boundary:**
+
+KeyMail grants no authority.
+
+- Receiving a KeyMailEnvelope does NOT imply consent
+- Receiving a KeyMailEnvelope does NOT trigger execution
+- Receiving a KeyMailEnvelope does NOT propagate custody authority
+- KeyMail artefacts MUST NOT be interpreted as ConsentProof, delegation, or permission
+
+KeyMail is a transport and storage format only. All enforcement, admission, and authority decisions are external to KeyMail and defined by PQSEC.
+
+---
+
+## V.2 KeyMailEnvelope Structure
+
+KeyMailEnvelope = {
+  message_id: tstr,
+  thread_id: tstr / null,
+  sender_identity_ref: tstr,
+  recipient_identity_ref: tstr,
+  issued_tick: uint,
+  expiry_tick: uint,
+  session_id: tstr / null,
+  exporter_hash: bstr / null,
+  content_type: tstr,
+  encapsulated_key: bstr / null,
+  ciphertext: bstr,
+  nonce: bstr,
+  tag: bstr,
+  suite_profile: tstr,
+  sender_signature: bstr
+}
+
+---
+
+## V.3 Field Semantics
+
+**message_id**
+Unique identifier for this message. MUST be unique across all messages from this sender.
+
+**thread_id**
+Optional identifier for message threading. If present, MUST be consistent across all messages in a thread. Absence indicates a standalone message.
+
+**sender_identity_ref**
+Reference to the sender's identity artefact (ModelIdentity for AI, custody identity for human operators, or service identity). Format is deployment-defined but MUST be resolvable to a verification key.
+
+**recipient_identity_ref**
+Reference to the recipient's identity artefact. Used for key agreement and routing. Format is deployment-defined.
+
+**issued_tick**
+Epoch Clock tick at which the message was created.
+
+**expiry_tick**
+Epoch Clock tick after which the message SHOULD be considered stale. Consuming systems MAY refuse messages past expiry. Enforcement is external.
+
+**session_id**
+Optional session identifier for binding messages to a specific conversational session.
+
+**exporter_hash**
+Optional TLS exporter hash for session binding. When present, MUST match the active session's exporter hash for the message to be accepted in session-bound contexts.
+
+**content_type**
+MIME type or PQ-defined type identifier for the decrypted payload. Common values:
+- `text/plain` — Plain text message
+- `application/cbor` — Structured CBOR payload
+- `application/json` — JSON payload
+- `pqsf:artefact` — Embedded PQSF artefact (ConsentProof, PolicyBundle, etc.)
+
+**encapsulated_key**
+ML-KEM encapsulated key ciphertext for the recipient. MUST be present when using ephemeral key agreement. MAY be null when using pre-shared keys or when the encapsulated key is transported separately. When present, MUST be the output of ML-KEM-1024.Encapsulate() or equivalent KEM operation.
+
+**ciphertext**
+Encrypted message payload. MUST be produced by an authenticated encryption scheme defined by suite_profile.
+
+**nonce**
+Cryptographic nonce used for encryption. MUST satisfy the nonce requirements of the AEAD scheme in suite_profile. MUST NOT be reused with the same key.
+
+**tag**
+Authentication tag from the AEAD scheme.
+
+**suite_profile**
+CryptoSuiteProfile reference defining:
+- Key agreement scheme (e.g., ML-KEM-1024, X25519)
+- AEAD scheme (e.g., AES-256-GCM, XChaCha20-Poly1305)
+- Signature scheme for sender_signature
+
+**sender_signature**
+Signature over the canonical CBOR encoding of the envelope with sender_signature field omitted. Provides sender authentication and non-repudiation.
+
+---
+
+## V.4 Canonical Encoding Requirements
+
+1. KeyMailEnvelope MUST be encoded using PQSF Deterministic CBOR.
+2. sender_signature MUST be computed over the canonical CBOR encoding with the sender_signature field omitted.
+3. Re-encoding a decoded KeyMailEnvelope MUST produce byte-identical output.
+4. Non-canonical encodings MUST be rejected.
+
+---
+
+## V.5 Key Agreement and Encryption
+
+### V.5.1 Ephemeral Key Agreement
+
+For post-quantum key agreement:
+
+```
+(shared_secret, encapsulated_key) = ML-KEM-1024.Encapsulate(recipient_public_key)
+```
+
+The encapsulated_key MUST be transmitted alongside the KeyMailEnvelope or embedded in deployment-specific key transport.
+
+### V.5.2 Message Key Derivation
+
+```
+message_key = cSHAKE256(
+  shared_secret,
+  domain = "PQSF-KEYMAIL:message-key",
+  input  = canonical({
+    "message_id": message_id,
+    "sender_identity_ref": sender_identity_ref,
+    "recipient_identity_ref": recipient_identity_ref,
+    "issued_tick": issued_tick
+  })
+)
+```
+
+### V.5.3 Encryption
+
+```
+(ciphertext, tag) = AEAD.Encrypt(
+  key   = message_key,
+  nonce = nonce,
+  aad   = canonical({
+    "message_id": message_id,
+    "sender_identity_ref": sender_identity_ref,
+    "recipient_identity_ref": recipient_identity_ref,
+    "content_type": content_type
+  }),
+  plaintext = payload
+)
+```
+
+---
+
+## V.6 Validation Requirements
+
+A KeyMailEnvelope is valid if and only if:
+
+1. **Structural validity**: All required fields present and correctly typed
+2. **Canonical encoding**: Envelope is valid Deterministic CBOR
+3. **Signature verification**: sender_signature verifies under the sender's public key referenced by sender_identity_ref
+4. **Time validity**: issued_tick ≤ current_tick < expiry_tick (when freshness is enforced)
+5. **Session binding**: If session_id or exporter_hash is present, it matches the expected session context
+6. **Decryption success**: ciphertext decrypts successfully with valid tag
+
+Validation failure MUST NOT be silent. Implementations SHOULD report specific failure reasons for debugging.
+
+---
+
+## V.7 Thread Continuity
+
+For multi-message exchanges:
+
+1. All messages in a thread MUST share the same thread_id.
+2. thread_id SHOULD be generated by the thread initiator and reused by all participants.
+3. Thread membership is determined by thread_id only; sender/recipient pairs MAY vary within a thread.
+4. Thread ordering is determined by issued_tick. Ties are broken by message_id lexicographic order.
+
+---
+
+## V.8 Error Codes
+
+KeyMail defines the following error codes for validation failures:
+
+| Error Code | Meaning |
+|------------|---------|
+| E_KEYMAIL_STRUCTURE_INVALID | Required fields missing or malformed |
+| E_KEYMAIL_ENCODING_NONCANONICAL | Non-canonical CBOR encoding |
+| E_KEYMAIL_SIGNATURE_INVALID | Sender signature verification failed |
+| E_KEYMAIL_EXPIRED | Current tick ≥ expiry_tick |
+| E_KEYMAIL_FUTURE | issued_tick > current_tick |
+| E_KEYMAIL_SESSION_MISMATCH | Session binding mismatch |
+| E_KEYMAIL_DECRYPTION_FAILED | AEAD decryption or tag verification failed |
+| E_KEYMAIL_SENDER_UNKNOWN | sender_identity_ref cannot be resolved |
+| E_KEYMAIL_RECIPIENT_MISMATCH | Message not addressed to this recipient |
+
+---
+
+## V.9 Security Considerations
+
+### V.9.1 Forward Secrecy
+
+KeyMail with ephemeral ML-KEM key agreement provides forward secrecy: compromise of long-term keys does not compromise past messages encrypted with ephemeral shared secrets.
+
+For deployments requiring forward secrecy, implementations MUST:
+- Use ephemeral key encapsulation per message or per session
+- Securely delete ephemeral key material after use
+
+### V.9.2 Replay Protection
+
+KeyMail envelopes are self-describing and time-bounded, but replay protection is NOT inherent.
+
+Consuming systems MUST:
+- Track seen message_id values within a deployment scope
+- Reject duplicate message_id submissions
+- Consider expiry_tick when determining replay window
+
+### V.9.3 Metadata Protection
+
+KeyMail encrypts message content but does NOT encrypt:
+- sender_identity_ref
+- recipient_identity_ref
+- issued_tick / expiry_tick
+- thread_id
+- content_type
+
+Deployments with metadata confidentiality requirements MUST use additional transport-layer encryption (e.g., TLS, onion routing) or wrap KeyMailEnvelope in an outer EBTEnvelope.
+
+### V.9.4 Non-Authority Reinforcement
+
+Implementations MUST NOT:
+- Interpret KeyMailEnvelope receipt as consent
+- Trigger Authoritative operations based on message content without separate ConsentProof
+- Propagate custody or signing authority through KeyMail
+- Treat sender_signature as equivalent to ConsentProof signature
+
+---
+
+## V.10 Reference Implementation
+
+```python
+from dataclasses import dataclass
+from typing import Optional
+import os
+
+@dataclass(frozen=True)
+class KeyMailEnvelope:
+    message_id: str
+    thread_id: Optional[str]
+    sender_identity_ref: str
+    recipient_identity_ref: str
+    issued_tick: int
+    expiry_tick: int
+    session_id: Optional[str]
+    exporter_hash: Optional[bytes]
+    content_type: str
+    ciphertext: bytes
+    nonce: bytes
+    tag: bytes
+    suite_profile: str
+    sender_signature: bytes
+
+
+def create_keymail(
+    sender_identity_ref: str,
+    recipient_identity_ref: str,
+    payload: bytes,
+    content_type: str,
+    issued_tick: int,
+    expiry_tick: int,
+    sender_signing_key,
+    recipient_public_key,
+    suite_profile: str,
+    thread_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    exporter_hash: Optional[bytes] = None
+) -> KeyMailEnvelope:
+    """
+    Create a KeyMailEnvelope.
+    """
+    import uuid
+    
+    message_id = str(uuid.uuid4())
+    
+    # Key agreement (ML-KEM-1024)
+    shared_secret, encapsulated_key = ml_kem_1024_encapsulate(recipient_public_key)
+    
+    # Derive message key
+    key_context = canonical_cbor_encode({
+        "message_id": message_id,
+        "sender_identity_ref": sender_identity_ref,
+        "recipient_identity_ref": recipient_identity_ref,
+        "issued_tick": issued_tick
+    })
+    message_key = cshake256(
+        shared_secret,
+        domain=b"PQSF-KEYMAIL:message-key",
+        input=key_context,
+        output_length=32
+    )
+    
+    # Generate nonce
+    nonce = os.urandom(12)  # 96 bits for AES-256-GCM
+    
+    # Prepare AAD
+    aad = canonical_cbor_encode({
+        "message_id": message_id,
+        "sender_identity_ref": sender_identity_ref,
+        "recipient_identity_ref": recipient_identity_ref,
+        "content_type": content_type
+    })
+    
+    # Encrypt
+    ciphertext, tag = aes_256_gcm_encrypt(
+        key=message_key,
+        nonce=nonce,
+        plaintext=payload,
+        aad=aad
+    )
+    
+    # Build envelope without signature
+    envelope_data = {
+        "message_id": message_id,
+        "thread_id": thread_id,
+        "sender_identity_ref": sender_identity_ref,
+        "recipient_identity_ref": recipient_identity_ref,
+        "issued_tick": issued_tick,
+        "expiry_tick": expiry_tick,
+        "session_id": session_id,
+        "exporter_hash": exporter_hash,
+        "content_type": content_type,
+        "ciphertext": ciphertext,
+        "nonce": nonce,
+        "tag": tag,
+        "suite_profile": suite_profile
+    }
+    
+    # Sign
+    signing_payload = canonical_cbor_encode(envelope_data)
+    sender_signature = sign(sender_signing_key, signing_payload, suite_profile)
+    
+    return KeyMailEnvelope(
+        message_id=message_id,
+        thread_id=thread_id,
+        sender_identity_ref=sender_identity_ref,
+        recipient_identity_ref=recipient_identity_ref,
+        issued_tick=issued_tick,
+        expiry_tick=expiry_tick,
+        session_id=session_id,
+        exporter_hash=exporter_hash,
+        content_type=content_type,
+        ciphertext=ciphertext,
+        nonce=nonce,
+        tag=tag,
+        suite_profile=suite_profile,
+        sender_signature=sender_signature
+    )
+
+
+def validate_keymail(
+    envelope: KeyMailEnvelope,
+    current_tick: int,
+    sender_public_key,
+    expected_session_id: Optional[str] = None,
+    expected_exporter_hash: Optional[bytes] = None,
+    seen_message_ids: Optional[set] = None
+) -> tuple[bool, Optional[str]]:
+    """
+    Validate a KeyMailEnvelope.
+    Returns (valid, error_code).
+    """
+    # Check replay
+    if seen_message_ids is not None:
+        if envelope.message_id in seen_message_ids:
+            return False, "E_KEYMAIL_REPLAY"
+    
+    # Check time bounds
+    if envelope.issued_tick > current_tick:
+        return False, "E_KEYMAIL_FUTURE"
+    
+    if current_tick >= envelope.expiry_tick:
+        return False, "E_KEYMAIL_EXPIRED"
+    
+    # Check session binding
+    if expected_session_id is not None and envelope.session_id != expected_session_id:
+        return False, "E_KEYMAIL_SESSION_MISMATCH"
+    
+    if expected_exporter_hash is not None and envelope.exporter_hash != expected_exporter_hash:
+        return False, "E_KEYMAIL_SESSION_MISMATCH"
+    
+    # Verify signature
+    envelope_data = {
+        "message_id": envelope.message_id,
+        "thread_id": envelope.thread_id,
+        "sender_identity_ref": envelope.sender_identity_ref,
+        "recipient_identity_ref": envelope.recipient_identity_ref,
+        "issued_tick": envelope.issued_tick,
+        "expiry_tick": envelope.expiry_tick,
+        "session_id": envelope.session_id,
+        "exporter_hash": envelope.exporter_hash,
+        "content_type": envelope.content_type,
+        "ciphertext": envelope.ciphertext,
+        "nonce": envelope.nonce,
+        "tag": envelope.tag,
+        "suite_profile": envelope.suite_profile
+    }
+    signing_payload = canonical_cbor_encode(envelope_data)
+    
+    if not verify_signature(sender_public_key, signing_payload, envelope.sender_signature, envelope.suite_profile):
+        return False, "E_KEYMAIL_SIGNATURE_INVALID"
+    
+    # Track message_id
+    if seen_message_ids is not None:
+        seen_message_ids.add(envelope.message_id)
+    
+    return True, None
+
+
+def decrypt_keymail(
+    envelope: KeyMailEnvelope,
+    recipient_private_key,
+    encapsulated_key: bytes
+) -> tuple[Optional[bytes], Optional[str]]:
+    """
+    Decrypt a KeyMailEnvelope payload.
+    Returns (plaintext, error_code).
+    """
+    # Decapsulate shared secret
+    shared_secret = ml_kem_1024_decapsulate(recipient_private_key, encapsulated_key)
+    
+    # Derive message key
+    key_context = canonical_cbor_encode({
+        "message_id": envelope.message_id,
+        "sender_identity_ref": envelope.sender_identity_ref,
+        "recipient_identity_ref": envelope.recipient_identity_ref,
+        "issued_tick": envelope.issued_tick
+    })
+    message_key = cshake256(
+        shared_secret,
+        domain=b"PQSF-KEYMAIL:message-key",
+        input=key_context,
+        output_length=32
+    )
+    
+    # Prepare AAD
+    aad = canonical_cbor_encode({
+        "message_id": envelope.message_id,
+        "sender_identity_ref": envelope.sender_identity_ref,
+        "recipient_identity_ref": envelope.recipient_identity_ref,
+        "content_type": envelope.content_type
+    })
+    
+    # Decrypt
+    try:
+        plaintext = aes_256_gcm_decrypt(
+            key=message_key,
+            nonce=envelope.nonce,
+            ciphertext=envelope.ciphertext,
+            tag=envelope.tag,
+            aad=aad
+        )
+        return plaintext, None
+    except Exception:
+        return None, "E_KEYMAIL_DECRYPTION_FAILED"
+```
+
+---
+
+## V.11 Test Vector Requirements
+
+Implementations MUST provide test vectors demonstrating:
+
+- ☐ KeyMailEnvelope round-trip (encode → decode → encode produces identical bytes)
+- ☐ Signature verification success with valid sender key
+- ☐ Signature verification failure with wrong sender key
+- ☐ Decryption success with correct recipient key
+- ☐ Decryption failure with wrong recipient key
+- ☐ Rejection of expired messages (current_tick ≥ expiry_tick)
+- ☐ Rejection of future-dated messages (issued_tick > current_tick)
+- ☐ Session binding enforcement when exporter_hash is present
+- ☐ Replay detection via message_id tracking
+
+---
+
+## V.12 Conformance
+
+An implementation is KeyMail-conformant if it:
+
+1. Produces only canonical CBOR KeyMailEnvelope artefacts
+2. Validates all required fields before processing
+3. Verifies sender_signature before trusting message content
+4. Enforces time bounds when freshness is required
+5. Does NOT interpret KeyMailEnvelope as authority, consent, or execution capability
+6. Implements replay protection via message_id tracking
+7. Supports at least one post-quantum key agreement scheme (ML-KEM-1024)
+
+---
+
+*KeyMail provides secure message transport only. All authority and enforcement semantics are defined by PQSEC.*
+
+---
+
+Changelog
+Version 2.0.2 (Current)
+Encoding Determinism: Standardized the use of JCS (JSON Canonicalization Scheme) and deterministic CBOR for byte-stable hashing and signing.
+
+Crypto-Agility: Enhanced the CryptoSuiteProfile mechanism to allow for seamless algorithm transitions (e.g., NIST Round 4 candidates) without requiring specification rewrites.
+
+Session Binding: Refined the Exporter Binding primitives to enable cryptographic session-scoped security that remains independent of transport-layer trust.
+
+EBT Implementation: Standardized the Encrypted-Before-Transport (EBT) wrapper for sensitive cryptographic and identity artefacts.
+
+---
+
+## **ACKNOWLEDGEMENTS (INFORMATIVE)**
+
+This specification builds on decades of work in cryptography, secure protocol design, distributed systems, and formal verification.
+
+The author acknowledges the foundational contributions of the following individuals and communities, whose work made the concepts formalised in **PQSF** possible:
+
+* **Ralph Merkle** — for Merkle trees and tamper-evident state commitment, foundational to deterministic ledgers and integrity verification.
+* **Whitfield Diffie** and **Martin Hellman** — for public-key cryptography and key exchange, enabling modern secure protocols.
+* **Ron Rivest**, **Adi Shamir**, and **Leonard Adleman** — for early public-key systems that shaped adversarial threat models later challenged by quantum computation.
+* **Peter Shor** — for demonstrating the impact of quantum computation on classical cryptographic assumptions.
+* **Daniel J. Bernstein** — for cryptographic engineering, constant-time design, misuse resistance, and adversarial robustness.
+* **Hugo Krawczyk** — for HKDF, protocol composition, and modern key-derivation and binding primitives.
+* **Kahn Academy of Secure Protocol Design / CFRG contributors** — for advancing modern protocol analysis, canonical encoding discipline, and cryptographic agility.
+* **IETF CBOR and COSE working groups** — for deterministic encoding, structured data representation, and secure object signing foundations.
+* **IETF TLS working group** — for exporter mechanisms and session-bound security primitives.
+* **The NIST Post-Quantum Cryptography Project** — for standardising post-quantum cryptographic primitives suitable for long-lived, high-assurance systems.
+* **Researchers and contributors to post-quantum KEM and signature schemes** — for practical, analyzable replacements for quantum-vulnerable primitives.
+* **Bitcoin protocol and security researchers** — for adversarial thinking around replay resistance, deterministic encoding, and failure modes in hostile networks.
+
+Acknowledgement is also due to open-source contributors, cryptographic reviewers, and independent researchers whose adversarial review culture continues to surface edge cases, refine threat models, and improve protocol correctness. Any remaining errors or omissions are the responsibility of the author.
+
+---
+
+If you find this work useful and wish to support continued development and public availability of the PQSF specification, donations are welcome:
+
+**Bitcoin:**
+`bc1q380874ggwuavgldrsyqzzn9zmvvldkrs8aygkw`
