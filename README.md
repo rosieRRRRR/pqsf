@@ -1222,6 +1222,20 @@ AuditSignature = {
 
 ---
 
+### 22.6 Authority and Interpretation Boundary (Normative)
+
+Supply-chain artefacts defined in this section are **descriptive only**.
+
+1. Supply-chain artefacts MUST NOT be interpreted as permission, approval, or execution authority.
+2. Presence of a valid supply-chain artefact MUST NOT imply trust or acceptance.
+3. Supply-chain artefacts MUST NOT be consumed directly by applications, runtimes, or operators for gating decisions.
+4. All enforcement, refusal, or admission decisions based on supply-chain artefacts MUST be performed exclusively by PQSEC via explicit predicates.
+5. Absence of a supply-chain artefact MUST NOT be interpreted as failure unless required by an active enforcement policy.
+
+Any implementation that derives authority, execution permission, or trust directly from PQSF supply-chain artefacts is non-conformant.
+
+---
+
 ## 23. Supply Chain Ledger Anchoring
 
 ### 23.1 Cross-Registrar Anchoring
