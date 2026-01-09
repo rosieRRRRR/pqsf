@@ -19,41 +19,98 @@ PQSF provides the foundational protocol primitives for the PQ stack: canonical e
 
 ## Index
 
-1. [Summary](#summary)
-2. [Non-Normative Overview](#non-normative-overview--for-explanation-and-orientation-only)
-3. [Scope and Protocol Boundary](#scope-and-protocol-boundary)
-4. [Non-Goals and Authority Prohibition](#non-goals-and-authority-prohibition)
-5. [Architecture Overview](#architecture-overview)
-6. [Explicit Dependencies](#expliciT-dependencies)
-7. [Canonical Encoding](#canonical-encoding)
-   1. [PQSF-Native Canonical Encoding (Deterministic CBOR Only)](#pqsf-native-canonical-encoding-deterministic-cbor-only)
-   2. [Strict CBOR Profile](#strict-cbor-profile)
-   3. [Fuzzing Resistance via Canonical Encoding](#fuzzing-resistance-via-canonical-encoding)
-   4. [Epoch Clock Canonical Encoding Exception (JCS Canonical JSON Only)](#epoch-clock-canonical-encoding-exception-jcs-canonical-json-only)
-8. [CryptoSuiteProfile Indirection](#cryptosuiteprofile-indirection)
-9. [Hashing Interface](#hashing-interface)
-10. [Signature Interface](#signature-interface)
-11. [Domain Separation](#domain-separation)
-12. [Deterministic Derivation](#deterministic-derivation)
-13. [Universal Secret Derivation](#universal-secret-derivation)
-14. [Epoch Clock Integration Objects](#epoch-clock-integration-objects)
-15. [Exporter Binding Primitive](#exporter-binding-primitive)
-16. [ConsentProof Grammar](#consentproof-grammar)
-17. [Policy Objects and Governance Metadata](#policy-objects-and-governance-metadata)
-18. [LedgerEntry Grammar](#ledgerentry-grammar)
-19. [Merkle Ledger Serialization](#merkle-ledger-serialization)
-20. [RecoveryCapsule Grammar](#recoverycapsule-grammar)
-21. [Encrypted-Before-Transport Wrapper](#encrypted-before-transport-wrapper)
-22. [Supply Chain Artefact Types](#supply-chain-artefact-types)
-23. [Supply Chain Ledger Anchoring](#supply-chain-ledger-anchoring)
-24. [Reproducible Build Support](#reproducible-build-support)
-25. [No Trust in Network Location](#no-trust-in-network-location)
-26. [Sovereign Transport Protocol Grammar](#sovereign-transport-protocol-grammar-stp)
-27. [Failure Semantics](#failure-semantics)
-28. [Conformance](#conformance)
-29. [Security Considerations](#security-considerations)
-30. [Annexes](#annexes)
-31. [Changelog](#changelog)
+- [Summary](#summary)
+
+- [Non-Normative Overview — For Explanation and Orientation Only](#non-normative-overview--for-explanation-and-orientation-only)
+
+- [Framework Guidance (Non-Normative)](#framework-guidance-non-normative)
+  - [0.3 Quick Start for Implementers (Non-Normative)](#03-quick-start-for-implementers-non-normative)
+  - [0.4 Why Evidence-Only Architecture Matters (Non-Normative)](#04-why-evidence-only-architecture-matters-non-normative)
+  - [0.5 Comparison to Common Patterns (Non-Normative, Illustrative Only)](#05-comparison-to-common-patterns-non-normative-illustrative-only)
+  - [0.6 Annex Relationship (Non-Normative)](#06-annex-relationship-non-normative)
+
+- [1. Scope and Protocol Boundary](#1-scope-and-protocol-boundary)
+- [2. Non Goals and Authority Prohibition](#2-non-goals-and-authority-prohibition)
+- [3. Threat Model](#3-threat-model)
+- [4. Trust Assumptions](#4-trust-assumptions)
+- [5. Architecture Overview](#5-architecture-overview)
+- [5A. Explicit Dependencies](#5a-explicit-dependencies)
+- [6. Conformance Keywords](#6-conformance-keywords)
+
+- [7. Canonical Encoding](#7-canonical-encoding)
+  - [7.1 PQSF-Native Canonical Encoding (Deterministic CBOR Only)](#71-pqsf-native-canonical-encoding-deterministic-cbor-only)
+  - [7.2 Strict CBOR Profile](#72-strict-cbor-profile)
+  - [7.3 Fuzzing Resistance via Canonical Encoding](#73-fuzzing-resistance-via-canonical-encoding)
+    - [7.3.1 Canonical Encoding as Fuzzing Defense](#731-canonical-encoding-as-fuzzing-defense)
+    - [7.3.2 Eliminated Encoding Fuzzing Vectors](#732-eliminated-encoding-fuzzing-vectors)
+    - [7.3.3 Canonical Encoding Test Requirements](#733-canonical-encoding-test-requirements)
+    - [7.3.4 Conformance](#734-conformance)
+  - [7.4 Epoch Clock Canonical Encoding Exception (JCS Canonical JSON Only)](#74-epoch-clock-canonical-encoding-exception-jcs-canonical-json-only)
+
+- [8. CryptoSuiteProfile Indirection](#8-cryptosuiteprofile-indirection)
+- [9. Hashing Interface](#9-hashing-interface)
+- [10. Signature Interface](#10-signature-interface)
+- [11. Domain Separation](#11-domain-separation)
+- [12. Deterministic Derivation](#12-deterministic-derivation)
+- [13. Universal Secret Derivation](#13-universal-secret-derivation)
+
+- [14. Epoch Clock Integration Objects](#14-epoch-clock-integration-objects)
+- [15. Exporter Binding Primitive](#15-exporter-binding-primitive)
+
+- [16. ConsentProof Grammar](#16-consentproof-grammar)
+- [17. Policy Objects and Governance Metadata](#17-policy-objects-and-governance-metadata)
+
+- [18. LedgerEntry Grammar](#18-ledgerentry-grammar)
+- [19. Merkle Ledger Serialization](#19-merkle-ledger-serialization)
+- [20. RecoveryCapsule Grammar](#20-recoverycapsule-grammar)
+
+- [21. Encrypted-Before-Transport Wrapper](#21-encrypted-before-transport-wrapper)
+
+- [22. Supply Chain Artefact Types](#22-supply-chain-artefact-types)
+- [23. Supply Chain Ledger Anchoring](#23-supply-chain-ledger-anchoring)
+- [24. Reproducible Build Support](#24-reproducible-build-support)
+- [25. No Trust in Network Location](#25-no-trust-in-network-location)
+- [26. Security Considerations (Supply Chain Additions)](#26-security-considerations-supply-chain-additions)
+
+- [27. Sovereign Transport Protocol Grammar (STP)](#27-sovereign-transport-protocol-grammar-stp)
+- [28. Failure Semantics](#28-failure-semantics)
+
+- [28A. PQSF Conformance Checklist (Non-Normative)](#28a-pqsf-conformance-checklist-non-normative)
+- [29. Conformance](#29-conformance)
+- [32. Conformance Checklist](#32-conformance-checklist)
+
+- [Annexes](#annexes)
+  - [Annex A – Canonical CBOR Profile Summary](#annex-a--canonical-cbor-profile-summary)
+  - [Annex B – Example CryptoSuiteProfile](#annex-b--example-cryptosuiteprofile)
+  - [Annex C – Reference Pseudocode (PQSF-Native)](#annex-c--reference-pseudocode-pqsf-native)
+  - [Annex D – Reference Pseudocode (Epoch Clock Binding)](#annex-d--reference-pseudocode-epoch-clock-binding)
+  - [Annex E – Replay Safety Checklist](#annex-e--replay-safety-checklist)
+  - [Annex F – Privacy Policy Namespace](#annex-f--privacy-policy-namespace)
+  - [Annex G – STP Session Lifecycle Example](#annex-g--stp-session-lifecycle-example)
+  - [Annex H — KeyMail (Informative)](#annex-h--keymail-informative)
+  - [Annex I – EBT Encryption Flow Example](#annex-i--ebt-encryption-flow-example)
+  - [Annex J – Exporter Hash Derivation Example](#annex-j--exporter-hash-derivation-example)
+  - [Annex K – Merkle Tree Construction Example](#annex-k--merkle-tree-construction-example)
+  - [Annex L – PolicyBundle Validation Example](#annex-l--policybundle-validation-example)
+  - [Annex M – Profile Update Acceptance Logic](#annex-m--profile-update-acceptance-logic)
+  - [Annex N – Emergency Transition State Machine](#annex-n--emergency-transition-state-machine)
+  - [Annex O – STP Capability Negotiation Example](#annex-o--stp-capability-negotiation-example)
+  - [Annex P – ConsentProof Construction Example](#annex-p--consentproof-construction-example)
+  - [Annex Q – LedgerEntry Chain Validation](#annex-q--ledgerentry-chain-validation)
+  - [Annex R – RecoveryCapsule Activation Logic](#annex-r--recoverycapsule-activation-logic)
+  - [Annex S – Test Vector Checklist](#annex-s--test-vector-checklist)
+  - [Annex T – Performance Optimization Guidelines](#annex-t--performance-optimization-guidelines)
+  - [Annex U – Security Considerations Summary](#annex-u--security-considerations-summary)
+  - [Annex V — KeyMail: Secure Messaging Artefacts (Normative)](#annex-v--keymail-secure-messaging-artefacts-normative)
+  - [Annex W — Site Policy Overlay for Existing Web Systems (Normative)](#annex-w--site-policy-overlay-for-existing-web-systems-normative)
+  - [Annex X — Transport and Session Binding Overlay (Normative)](#annex-x--transport-and-session-binding-overlay-normative)
+  - [Annex Y — Preflight Interaction Binding (Normative)](#annex-y--preflight-interaction-binding-normative)
+  - [Annex Z — Optional Presence and Liveness Evidence (Normative)](#annex-z--optional-presence-and-liveness-evidence-normative)
+  - [Annex AA — Governance Metadata Artefact (Normative)](#annex-aa--governance-metadata-artefact-normative)
+  - [Annex AB — Delegation Evidence Artefacts (Normative)](#annex-ab--delegation-evidence-artefacts-normative)
+
+- [Changelog](#changelog)
+- [Acknowledgements (Informative)](#acknowledgements-informative)
 
 ---
 
@@ -90,6 +147,95 @@ indirection enables algorithm agility without rewriting specifications.
 Exporter binding primitives allow session-scoped security without
 trusting networks or intermediaries. PQSF is deliberately minimal and
 foundational; all authority and enforcement semantics live elsewhere.
+
+---
+
+## Framework Guidance (Non-Normative)
+
+### 0.3 Quick Start for Implementers (Non-Normative)
+
+PQSF is modular. Implementations MAY adopt annexes independently, subject to the dependency rules below.
+
+Recommended adoption order:
+
+1. Core PQSF (canonical encoding, CryptoSuiteProfiles, hashing, signing)
+2. Annex X (Session Binding Primitive) if session-scoped evidence is required
+3. Annex W (Site Policy Overlay) if web-exposed policy evidence is required
+4. Annex AB (Delegation Evidence) if delegation evidence must interoperate across systems
+5. Annex Y (Preflight Interaction Binding) if non-repudiable, sealed interaction commitments are required
+6. Annex V (KeyMail Secure Messaging) if secure, non-authoritative messaging artefacts are required
+7. Annex Z (Presence Evidence) only if high-assurance presence or liveness is required by policy
+8. Annex AA (Governance Metadata) only if descriptive multi-party governance metadata is required
+
+Dependency rule:
+
+Implementations adopting a later annex MUST also implement all required earlier annexes.
+
+For example, adopting Annex Y requires implementation of Core PQSF and Annex X.
+
+Annex adoption MUST NOT change the authority model.
+
+PQSF produces evidence only.  
+Consuming enforcement specifications (e.g. PQSEC) decide.
+
+---
+
+### 0.4 Why Evidence-Only Architecture Matters (Non-Normative)
+
+Many security systems conflate evidence with authority:
+
+- Tokens grant access
+- Assertions grant permissions
+- API keys imply capability by possession
+
+PQSF deliberately separates these concerns:
+
+- PQSF produces cryptographically verifiable evidence artefacts
+- PQSEC evaluates evidence and enforces refusal-only logic
+- No PQSF artefact can grant capability or permission
+
+This separation enables:
+
+- Fail-closed operation (absence or ambiguity evaluates to UNAVAILABLE)
+- Composability (multiple evidence types combine without altering authority boundaries)
+- Verifiable security posture (evidence can be audited independently of enforcement)
+- Reduced bypass surface (no implicit permission via artefact presence)
+
+PQSF exists to ensure systems can be verified without being trusted.
+
+---
+
+### 0.5 Comparison to Common Patterns (Non-Normative, Illustrative Only)
+
+| Pattern | Evidence / Authority Relationship | Canonical Encoding | Refusal-First |
+|--------|----------------------------------|-------------------|---------------|
+| PQSF + PQSEC | Evidence separated from authority | Yes | Yes |
+| OAuth-style tokens | Evidence often acts as authority | No | No |
+| Assertion-based SSO | Assertions often act as authority | No | No |
+| API keys | Key possession implies authority | No | No |
+
+Refusal-First means the system defaults to UNAVAILABLE if any required
+evidence is missing, invalid, expired, or ambiguous. Absence of evidence
+never results in implicit ALLOW.
+
+---
+
+### 0.6 Annex Relationship (Non-Normative)
+
+PQSF annexes form a layered evidence ecosystem:
+
+- Core PQSF provides canonical encoding and CryptoSuiteProfile-governed cryptography
+- Annex X provides session-scoped binding evidence
+- Annex W extends policy evidence to web publishing and retrieval
+- Annex AB provides interoperable delegation evidence and revocation
+- Annex Y provides preflight interaction binding evidence
+- Annex Z provides optional presence evidence
+- Annex AA provides descriptive governance metadata
+
+Annexes are optional and may be adopted independently where dependencies are satisfied.
+
+Adopting an annex never changes the authority model.
+PQSF produces evidence only. PQSEC evaluates and enforces refusal.
 
 ---
 
@@ -1474,6 +1620,72 @@ STP messages MUST be canonical CBOR as defined in Section 7.
 2. Any PQSF-native object failing structural validation, canonical encoding validation, profile validation, hash validation, or signature verification MUST be rejected.
 3. Any Epoch Clock artefact whose verified bytes do not match the supplied JCS Canonical JSON bytes MUST be rejected by consuming enforcement specifications.
 4. PQSF defines no retry, escalation, or authority behaviour.
+
+---
+
+## 28A. PQSF Conformance Checklist (Non-Normative)
+
+An implementation MAY claim conformance at one or more levels below.
+
+### Core PQSF (Required for any claim)
+
+☐ Deterministic canonical CBOR encoding enforced  
+☐ Canonical signing with signature-field omission  
+☐ CryptoSuiteProfile indirection enforced  
+☐ Deterministic validation and rejection semantics  
+☐ Absence or failure evaluates to UNAVAILABLE  
+
+### Annex X — Session Binding Primitive
+
+☐ Exporter-derived session material consumed  
+☐ SessionBinding artefacts validated canonically  
+☐ Session binding does not grant authority  
+☐ Failure or ambiguity evaluates to UNAVAILABLE  
+
+### Annex W — Site Policy Overlay
+
+☐ SitePolicyKeyDescriptor validated  
+☐ DomainControlProof validated per policy  
+☐ PrivacySiteDeclaration validated under policy key  
+☐ Revocation artefacts honoured when present  
+☐ No trust or approval inferred from policy presence  
+
+### Annex AB — Delegation Evidence
+
+☐ DelegationGrant artefacts validated  
+☐ DelegationRevocation artefacts validated  
+☐ Scope canonicalisation enforced (sorted, de-duplicated)  
+☐ Expiry enforced deterministically  
+☐ Exporter binding enforced when exporter_hash is present  
+☐ Consent checked when consent_ref is present and required by policy  
+☐ Delegation evidence does not grant authority  
+
+### Annex Y — Preflight Interaction Binding
+
+☐ PreflightSessionTerms validated  
+☐ Transcript hash commitments verified deterministically  
+☐ PreflightBindReceipt non-repudiation enforced  
+☐ SEALED transcript policy respected  
+☐ Participation evidence does not imply outcome approval  
+
+### Annex Z — Presence Evidence
+
+☐ PresenceProof artefacts validated  
+☐ Expiry enforced deterministically  
+☐ Absence treated as UNAVAILABLE unless required by policy  
+
+### Annex AA — Governance Metadata
+
+☐ GovernanceMetadata artefacts validated  
+☐ Governance metadata treated as descriptive evidence only  
+☐ No governance authority inferred  
+
+### Enforcement Boundary
+
+☐ No PQSF artefact directly grants permission  
+☐ All allow/deny decisions delegated to PQSEC or equivalent  
+
+Implementations SHOULD disclose which annexes are supported.
 
 ---
 
