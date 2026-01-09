@@ -21,7 +21,7 @@ PQSF provides the foundational protocol primitives for the PQ stack: canonical e
 
 - [Summary](#summary)
 
-- [Non-Normative Overview — For Explanation and Orientation Only](#non-normative-overview--for-explanation-and-orientation-only)
+- [Non-Normative Overview (For Explanation and Orientation Only)](#non-normative-overview-for-explanation-and-orientation-only)
 
 - [Framework Guidance (Non-Normative)](#framework-guidance-non-normative)
   - [0.3 Quick Start for Implementers (Non-Normative)](#03-quick-start-for-implementers-non-normative)
@@ -30,11 +30,10 @@ PQSF provides the foundational protocol primitives for the PQ stack: canonical e
   - [0.6 Annex Relationship (Non-Normative)](#06-annex-relationship-non-normative)
 
 - [1. Scope and Protocol Boundary](#1-scope-and-protocol-boundary)
-- [2. Non Goals and Authority Prohibition](#2-non-goals-and-authority-prohibition)
+- [2. Non-Goals and Authority Prohibition](#2-non-goals-and-authority-prohibition)
 - [3. Threat Model](#3-threat-model)
 - [4. Trust Assumptions](#4-trust-assumptions)
 - [5. Architecture Overview](#5-architecture-overview)
-- [5A. Explicit Dependencies](#5a-explicit-dependencies)
 - [6. Conformance Keywords](#6-conformance-keywords)
 
 - [7. Canonical Encoding](#7-canonical-encoding)
@@ -70,16 +69,17 @@ PQSF provides the foundational protocol primitives for the PQ stack: canonical e
 - [23. Supply Chain Ledger Anchoring](#23-supply-chain-ledger-anchoring)
 - [24. Reproducible Build Support](#24-reproducible-build-support)
 - [25. No Trust in Network Location](#25-no-trust-in-network-location)
-- [26. Security Considerations (Supply Chain Additions)](#26-security-considerations-supply-chain-additions)
+- [26. Supply Chain Security Considerations](#26-supply-chain-security-considerations)
 
 - [27. Sovereign Transport Protocol Grammar (STP)](#27-sovereign-transport-protocol-grammar-stp)
 - [28. Failure Semantics](#28-failure-semantics)
 
-- [28A. PQSF Conformance Checklist (Non-Normative)](#28a-pqsf-conformance-checklist-non-normative)
 - [29. Conformance](#29-conformance)
+- [30. Explicit Dependencies](#30-explicit-dependencies)
+- [31. Security Considerations](#31-security-considerations)
 - [32. Conformance Checklist](#32-conformance-checklist)
 
-- [Annexes](#annexes)
+- [Annex Index](#annex-index)
   - [Annex A – Canonical CBOR Profile Summary](#annex-a--canonical-cbor-profile-summary)
   - [Annex B – Example CryptoSuiteProfile](#annex-b--example-cryptosuiteprofile)
   - [Annex C – Reference Pseudocode (PQSF-Native)](#annex-c--reference-pseudocode-pqsf-native)
@@ -114,7 +114,7 @@ PQSF provides the foundational protocol primitives for the PQ stack: canonical e
 
 ---
 
-## Non-Normative Overview — For Explanation and Orientation Only
+## Non-Normative Overview (For Explanation and Orientation Only)
 
 **This section is NOT part of the conformance surface.  
 It is provided for explanatory and onboarding purposes only.**
@@ -163,22 +163,15 @@ Recommended adoption order:
 3. Annex W (Site Policy Overlay) if web-exposed policy evidence is required
 4. Annex AB (Delegation Evidence) if delegation evidence must interoperate across systems
 5. Annex Y (Preflight Interaction Binding) if non-repudiable, sealed interaction commitments are required
-6. Annex V (KeyMail Secure Messaging) if secure, non-authoritative messaging artefacts are required
-7. Annex Z (Presence Evidence) only if high-assurance presence or liveness is required by policy
-8. Annex AA (Governance Metadata) only if descriptive multi-party governance metadata is required
+6. Annex Z (Presence Evidence) only if high-assurance presence or liveness is required by policy
+7. Annex AA (Governance Metadata) only if descriptive multi-party governance metadata is required
 
 Dependency rule:
-
 Implementations adopting a later annex MUST also implement all required earlier annexes.
-
 For example, adopting Annex Y requires implementation of Core PQSF and Annex X.
 
-Annex adoption MUST NOT change the authority model.
-
-PQSF produces evidence only.  
-Consuming enforcement specifications (e.g. PQSEC) decide.
-
----
+Annex adoption MUST NOT change the authority model:
+PQSF produces evidence only. Consuming enforcement specifications (e.g. PQSEC) decide.
 
 ### 0.4 Why Evidence-Only Architecture Matters (Non-Normative)
 
@@ -203,39 +196,35 @@ This separation enables:
 
 PQSF exists to ensure systems can be verified without being trusted.
 
----
-
 ### 0.5 Comparison to Common Patterns (Non-Normative, Illustrative Only)
+
+This table contrasts architectural approaches. It is not normative and exists solely to aid understanding.
 
 | Pattern | Evidence / Authority Relationship | Canonical Encoding | Refusal-First |
 |--------|----------------------------------|-------------------|---------------|
 | PQSF + PQSEC | Evidence separated from authority | Yes | Yes |
 | OAuth-style tokens | Evidence often acts as authority | No | No |
-| Assertion-based SSO | Assertions often act as authority | No | No |
+| Assertion-based SSO | Assertions often acts as authority | No | No |
 | API keys | Key possession implies authority | No | No |
 
-Refusal-First means the system defaults to UNAVAILABLE if any required
-evidence is missing, invalid, expired, or ambiguous. Absence of evidence
-never results in implicit ALLOW.
-
----
+Refusal-First: The system defaults to a secure UNAVAILABLE state if any required evidence
+is missing, invalid, expired, or ambiguous. The absence of evidence never results in
+implicit ALLOW or degraded permissive behaviour.
 
 ### 0.6 Annex Relationship (Non-Normative)
 
 PQSF annexes form a layered evidence ecosystem:
 
-- Core PQSF provides canonical encoding and CryptoSuiteProfile-governed cryptography
-- Annex X provides session-scoped binding evidence
-- Annex W extends policy evidence to web publishing and retrieval
-- Annex AB provides interoperable delegation evidence and revocation
-- Annex Y provides preflight interaction binding evidence
-- Annex Z provides optional presence evidence
-- Annex AA provides descriptive governance metadata
+- Core PQSF provides canonical encoding and CryptoSuiteProfile-governed cryptography.
+- Annex X provides session-scoped binding evidence for artefacts that require session context.
+- Annex W extends policy evidence to web publishing and retrieval.
+- Annex AB provides interoperable delegation evidence and revocation.
+- Annex Y provides preflight interaction binding evidence, optionally session-bound via Annex X.
+- Annex Z provides optional presence evidence for high-assurance operations.
+- Annex AA provides optional descriptive governance metadata.
 
 Annexes are optional and may be adopted independently where dependencies are satisfied.
-
-Adopting an annex never changes the authority model.
-PQSF produces evidence only. PQSEC evaluates and enforces refusal.
+Adopting an annex never changes the authority model: PQSF produces evidence only, PQSEC evaluates and enforces refusal.
 
 ---
 
@@ -266,7 +255,7 @@ Any implementation using PQSF primitives for enforcement, refusal, escalation, l
 
 ---
 
-## 2. Non Goals and Authority Prohibition
+## 2. Non-Goals and Authority Prohibition
 
 PQSF does not define:
 
@@ -337,15 +326,11 @@ PQSF defines a protocol substrate consisting of:
 
 PQSF defines object structure and validation rules only. PQSF does not define operational behaviour.
 
----
+External specifications and standards required for correct
+implementation of PQSF are listed in Section 30.
 
-## 5A. Explicit Dependencies
-
-| Specification | Minimum Version | Purpose |
-|---------------|-----------------|---------|
-| Epoch Clock | ≥ 2.1.1 | JCS Canonical JSON artefact handling exception |
-
-PQSF is foundational infrastructure. Most PQ specifications depend on PQSF; PQSF depends only on Epoch Clock for the canonical JSON encoding exception.
+This section describes architectural relationships only and does not
+enumerate normative dependencies.
 
 ---
 
@@ -932,16 +917,20 @@ Any PQSF-native object that binds to time MUST bind to one of:
 2. Exporter context MUST be canonical CBOR encoding of:
 
 ```
+
 {
-  pqsf_version: "2.0.2",
-  session_id: tstr,
-  role_id: tstr,
-  operation_class: "Authoritative" / "NonAuthoritative"
+pqsf_version: "2.0.2",
+session_id: tstr,
+role_id: tstr,
+operation_class: "Authoritative" / "NonAuthoritative"
 }
+
 ```
 
 3. For Authoritative operations, exporter_hash MUST NOT be null.
 4. Exporter mismatch MUST invalidate the artefact.
+
+Authoritative refers to operations whose execution is gated by PQSEC predicates. It does not imply that authority is granted by PQSF artefacts. PQSF artefacts remain evidence-only in all cases.
 
 ---
 
@@ -1476,7 +1465,12 @@ All trust MUST be:
 
 ---
 
-## 26. Security Considerations (Supply Chain Additions)
+## 26. Supply Chain Security Considerations
+
+This section covers supply-chain-specific security considerations. General PQSF security properties and threat boundaries are defined in Section 31.
+
+This section defines security considerations specific to PQSF supply
+chain artefacts and extensions.
 
 ### Threats Addressed
 
@@ -1623,75 +1617,14 @@ STP messages MUST be canonical CBOR as defined in Section 7.
 
 ---
 
-## 28A. PQSF Conformance Checklist (Non-Normative)
-
-An implementation MAY claim conformance at one or more levels below.
-
-### Core PQSF (Required for any claim)
-
-☐ Deterministic canonical CBOR encoding enforced  
-☐ Canonical signing with signature-field omission  
-☐ CryptoSuiteProfile indirection enforced  
-☐ Deterministic validation and rejection semantics  
-☐ Absence or failure evaluates to UNAVAILABLE  
-
-### Annex X — Session Binding Primitive
-
-☐ Exporter-derived session material consumed  
-☐ SessionBinding artefacts validated canonically  
-☐ Session binding does not grant authority  
-☐ Failure or ambiguity evaluates to UNAVAILABLE  
-
-### Annex W — Site Policy Overlay
-
-☐ SitePolicyKeyDescriptor validated  
-☐ DomainControlProof validated per policy  
-☐ PrivacySiteDeclaration validated under policy key  
-☐ Revocation artefacts honoured when present  
-☐ No trust or approval inferred from policy presence  
-
-### Annex AB — Delegation Evidence
-
-☐ DelegationGrant artefacts validated  
-☐ DelegationRevocation artefacts validated  
-☐ Scope canonicalisation enforced (sorted, de-duplicated)  
-☐ Expiry enforced deterministically  
-☐ Exporter binding enforced when exporter_hash is present  
-☐ Consent checked when consent_ref is present and required by policy  
-☐ Delegation evidence does not grant authority  
-
-### Annex Y — Preflight Interaction Binding
-
-☐ PreflightSessionTerms validated  
-☐ Transcript hash commitments verified deterministically  
-☐ PreflightBindReceipt non-repudiation enforced  
-☐ SEALED transcript policy respected  
-☐ Participation evidence does not imply outcome approval  
-
-### Annex Z — Presence Evidence
-
-☐ PresenceProof artefacts validated  
-☐ Expiry enforced deterministically  
-☐ Absence treated as UNAVAILABLE unless required by policy  
-
-### Annex AA — Governance Metadata
-
-☐ GovernanceMetadata artefacts validated  
-☐ Governance metadata treated as descriptive evidence only  
-☐ No governance authority inferred  
-
-### Enforcement Boundary
-
-☐ No PQSF artefact directly grants permission  
-☐ All allow/deny decisions delegated to PQSEC or equivalent  
-
-Implementations SHOULD disclose which annexes are supported.
-
----
-
 ## 29. Conformance
 
-An implementation is PQSF-conformant if it:
+An implementation is PQSF-conformant if it satisfies all normative
+requirements defined in this specification and, where applicable,
+the requirements of any normative annexes it claims to support.
+
+A consolidated, implementation-oriented conformance checklist is
+provided in Section 32 for verification and documentation purposes.
 
 * enforces strict deterministic CBOR encoding for PQSF-native objects
 * enforces the Epoch Clock JCS Canonical JSON exception and forbids Epoch Clock re-encoding
@@ -1721,51 +1654,68 @@ PQSF depends on:
 * external enforcement specifications, including PQSEC
 * external time specification, including Epoch Clock
 
+PQSEC consumes PQSF artefacts exclusively as evidence and defines all predicate evaluation, refusal, and enforcement semantics.
+
 PQSF defines no enforcement authority.
 
 ---
 
-
 ## 31. Security Considerations
 
-### Threats Addressed
+This section defines general security properties, threat models, and
+out-of-scope considerations for PQSF as a whole.
 
-PQSF addresses the following threats within its defined scope:
+Supply-chain-specific security considerations are defined separately
+in Section 26.
 
-- **Encoding ambiguity and parser differentials:**  
-  Deterministic canonical encoding eliminates semantically equivalent but
-  byte-distinct representations that can be exploited across
-  implementations.
-
-- **Hash and signature mismatch attacks:**  
-  Byte-identical canonical encoding ensures that hashing and signing
-  inputs are stable and reproducible across platforms.
-
-- **Algorithm downgrade and agility failures:**  
-  CryptoSuiteProfile indirection prevents hardcoded algorithm reliance
-  and enables governed transitions without specification rewrites.
-
-- **Session confusion and cross-session replay:**  
-  Exporter binding primitives allow consuming specifications to bind
-  artefacts to authenticated session state.
+PQSF grants no authority and performs no enforcement. It defines
+deterministic protocol primitives only. Any security outcome depends on
+correct consumption and enforcement by external specifications (e.g.,
+PQSEC).
 
 ---
 
-### Threats NOT Addressed (Out of Scope)
+### Threats Addressed
 
-PQSF does NOT protect against:
+PQSF addresses the following threat classes within its defined scope:
 
-- **Enforcement errors or policy mistakes:**  
-  PQSF provides primitives only. Enforcement correctness is delegated to
-  consuming specifications (e.g., PQSEC).
+- **Encoding ambiguity and parser differentials**  
+  Deterministic canonical encoding eliminates semantically equivalent
+  but byte-distinct representations that can be exploited across
+  implementations.
 
-- **Transport protocol flaws:**  
+- **Hash and signature mismatch attacks**  
+  Byte-identical canonical encoding ensures that hashing and signing
+  inputs are stable and reproducible across platforms.
+
+- **Algorithm downgrade and agility failures**  
+  CryptoSuiteProfile indirection prevents hardcoded algorithm reliance
+  and enables governed cryptographic transitions without specification
+  rewrites.
+
+- **Session confusion and cross-session replay**  
+  Exporter binding primitives enable consuming specifications to bind
+  artefacts to authenticated session state without trusting network
+  location or transport intermediaries.
+
+---
+
+### Threats Not Addressed (Out of Scope)
+
+PQSF explicitly does NOT protect against:
+
+- **Enforcement errors or policy mistakes**  
+  PQSF provides evidence and validation primitives only. Correctness of
+  allow/deny decisions is delegated to consuming specifications.
+
+- **Transport protocol vulnerabilities**  
   PQSF does not define or secure transport protocols themselves.
 
-- **Key compromise or runtime compromise:**  
-  Key management and runtime integrity are outside PQSF’s scope.
+- **Key compromise or runtime compromise**  
+  Key management, secure storage, and runtime integrity are outside the
+  PQSF scope.
 
-- **Denial-of-service attacks:**  
+- **Denial-of-service attacks**  
   PQSF prioritizes correctness and determinism over availability.
 
 ---
@@ -1774,23 +1724,29 @@ PQSF does NOT protect against:
 
 PQSF grants no authority and performs no enforcement.
 
-It defines protocol rules and primitives only. Any authority or decision
-derived from PQSF artefacts is the responsibility of consuming
-specifications.
+It defines protocol grammar, canonical encoding, and validation rules
+only. Any authority, permission, or decision derived from PQSF artefacts
+is defined exclusively by consuming specifications.
 
 ---
 
 ### Fail-Closed Semantics
 
-PQSF itself does not permit or deny operations.
+PQSF is designed to support fail-closed operation in consuming systems.
 
-However, consuming systems MUST:
-- reject non-canonical encodings
-- reject unverifiable signatures or hashes
-- reject artefacts that do not conform to declared profiles
+All normative validation, rejection, and failure-handling rules for
+PQSF-native artefacts are defined exclusively in Section 28.
 
-Failure to meet PQSF rules MUST be treated as a hard failure by
-consumers.
+This section does not redefine protocol behaviour. It describes the
+security rationale for fail-closed operation, including resistance to:
+
+- parser differentials
+- downgrade attempts
+- replay ambiguity
+- partial validation bypass
+
+Absence, ambiguity, or failure of PQSF artefacts is intended to be
+treated as UNAVAILABLE by enforcement systems.
 
 ---
 
@@ -1801,27 +1757,28 @@ classes that rely on ambiguous or inconsistent representations.
 
 The following attack vectors are structurally mitigated:
 
-- **Parser differentials:**  
+- **Parser differentials**  
   Semantically identical inputs MUST canonicalize to a single byte
-  representation or be rejected. Multiple interpretations are forbidden.
+  representation or be rejected deterministically.
 
-- **Hash and signature mismatch attacks:**  
+- **Hash and signature mismatch attacks**  
   All hashing and signing operations are performed over canonical bytes
-  only. Re-encoding between parse and verification is forbidden.
+  only.
 
-- **Encoding variance attacks:**  
+- **Encoding variance attacks**  
   Alternate CBOR encodings (long-form integers, indefinite-length items,
-  unsorted maps) MUST be rejected deterministically.
+  unsorted maps) are rejected deterministically.
 
-- **Floating-point representation attacks:**  
+- **Floating-point representation attacks**  
   Floating-point values are prohibited entirely, eliminating NaN,
   signed-zero, and subnormal representation variance.
 
-- **Unicode normalization ambiguity:**  
+- **Unicode normalization ambiguity**  
   Canonical encodings operate on byte sequences. No implicit Unicode
-  normalization is permitted at the protocol layer.
+  normalization occurs at the protocol layer.
 
 As a result, fuzzing inputs collapse to one of two outcomes:
+
 - a single canonical byte representation, or
 - deterministic rejection.
 
@@ -1886,7 +1843,45 @@ below and documents any OPTIONAL features it claims to support.
 
 ---
 
-## 33. Annexes (Non Normative)
+## 33. Annexes
+
+### Annex Index
+
+This specification contains both Informative and Normative annexes.
+
+Informative annexes provide examples, guidance, and explanatory material only.
+Normative annexes define requirements that are part of the PQSF conformance surface.
+
+Unless explicitly stated otherwise, annexes are OPTIONAL and evidence-only.
+
+### 33.1 Informative Annexes
+
+The following annexes are Informative.
+They provide explanatory material, examples, pseudocode, guidance, or summaries.
+They do NOT define conformance requirements and MUST NOT be used as the basis for interoperability claims.
+
+Informative Annexes:
+Annex A – Annex U
+Annex H — KeyMail (Informative)
+
+---
+
+### 33.2 Normative Annexes
+
+The following annexes are Normative.
+They define OPTIONAL conformance surfaces and protocol artefacts.
+Implementations MAY claim conformance to one or more normative annexes independently of core PQSF conformance.
+
+Normative Annexes:
+Annex V — KeyMail: Secure Messaging Artefacts  
+Annex W — Site Policy Overlay for Existing Web Systems  
+Annex X — Transport and Session Binding Overlay  
+Annex Y — Preflight Interaction Binding  
+Annex Z — Optional Presence and Liveness Evidence  
+Annex AA — Governance Metadata Artefact  
+Annex AB — Delegation Evidence Artefacts
+
+---
 
 ### Annex A – Canonical CBOR Profile Summary
 
@@ -2024,6 +2019,16 @@ Client                                  Server
 ---
 
 ## Annex H — KeyMail (Informative)
+
+### Normative Relationship Notice
+
+This annex is Informative only.
+
+All normative requirements, structures, validation rules, and conformance
+criteria for KeyMail are defined exclusively in Annex V.
+
+This annex exists to provide descriptive context and MUST NOT be used
+for implementation, interoperability, or conformance decisions.
 
 ### H.1 Scope
 
@@ -2675,9 +2680,16 @@ While PQSF does not define performance requirements, the following optimizations
 
 ---
 
+
 # Annex V — KeyMail: Secure Messaging Artefacts (Normative)
 
-This annex defines secure, non-authoritative messaging artefacts for the PQ ecosystem.
+## Authority Declaration
+
+This annex is the sole normative specification for KeyMail.
+
+Any descriptive or illustrative material appearing elsewhere in this
+document, including Annex H, is non-authoritative and MUST NOT be used
+to derive requirements or conformance claims.
 
 ---
 
@@ -2685,28 +2697,21 @@ This annex defines secure, non-authoritative messaging artefacts for the PQ ecos
 
 KeyMail defines canonically encoded, encrypted message artefacts for secure communication between PQ-aware endpoints.
 
-**KeyMail provides:**
+KeyMail provides:
 - End-to-end encrypted message envelopes
 - Sender and recipient identity binding
 - Time-bounded message validity
-- Optional session binding for conversational contexts
-- Thread continuity for multi-message exchanges
-
-**Authority Boundary:**
+- Optional session binding
+- Thread continuity
 
 KeyMail grants no authority.
-
-- Receiving a KeyMailEnvelope does NOT imply consent
-- Receiving a KeyMailEnvelope does NOT trigger execution
-- Receiving a KeyMailEnvelope does NOT propagate custody authority
-- KeyMail artefacts MUST NOT be interpreted as ConsentProof, delegation, or permission
-
-KeyMail is a transport and storage format only. All enforcement, admission, and authority decisions are external to KeyMail and defined by PQSEC.
+Receipt of a KeyMailEnvelope MUST NOT imply consent, execution, approval, or delegation.
 
 ---
 
 ## V.2 KeyMailEnvelope Structure
 
+```cddl
 KeyMailEnvelope = {
   message_id: tstr,
   thread_id: tstr / null,
@@ -2724,464 +2729,350 @@ KeyMailEnvelope = {
   suite_profile: tstr,
   sender_signature: bstr
 }
+```
 
 ---
 
-## V.3 Field Semantics
+## V.3 Canonical Encoding Requirements
 
-**message_id**
-Unique identifier for this message. MUST be unique across all messages from this sender.
-
-**thread_id**
-Optional identifier for message threading. If present, MUST be consistent across all messages in a thread. Absence indicates a standalone message.
-
-**sender_identity_ref**
-Reference to the sender's identity artefact (ModelIdentity for AI, custody identity for human operators, or service identity). Format is deployment-defined but MUST be resolvable to a verification key.
-
-**recipient_identity_ref**
-Reference to the recipient's identity artefact. Used for key agreement and routing. Format is deployment-defined.
-
-**issued_tick**
-Epoch Clock tick at which the message was created.
-
-**expiry_tick**
-Epoch Clock tick after which the message SHOULD be considered stale. Consuming systems MAY refuse messages past expiry. Enforcement is external.
-
-**session_id**
-Optional session identifier for binding messages to a specific conversational session.
-
-**exporter_hash**
-Optional TLS exporter hash for session binding. When present, MUST match the active session's exporter hash for the message to be accepted in session-bound contexts.
-
-**content_type**
-MIME type or PQ-defined type identifier for the decrypted payload. Common values:
-- `text/plain` — Plain text message
-- `application/cbor` — Structured CBOR payload
-- `application/json` — JSON payload
-- `pqsf:artefact` — Embedded PQSF artefact (ConsentProof, PolicyBundle, etc.)
-
-**encapsulated_key**
-ML-KEM encapsulated key ciphertext for the recipient. MUST be present when using ephemeral key agreement. MAY be null when using pre-shared keys or when the encapsulated key is transported separately. When present, MUST be the output of ML-KEM-1024.Encapsulate() or equivalent KEM operation.
-
-**ciphertext**
-Encrypted message payload. MUST be produced by an authenticated encryption scheme defined by suite_profile.
-
-**nonce**
-Cryptographic nonce used for encryption. MUST satisfy the nonce requirements of the AEAD scheme in suite_profile. MUST NOT be reused with the same key.
-
-**tag**
-Authentication tag from the AEAD scheme.
-
-**suite_profile**
-CryptoSuiteProfile reference defining:
-- Key agreement scheme (e.g., ML-KEM-1024, X25519)
-- AEAD scheme (e.g., AES-256-GCM, XChaCha20-Poly1305)
-- Signature scheme for sender_signature
-
-**sender_signature**
-Signature over the canonical CBOR encoding of the envelope with sender_signature field omitted. Provides sender authentication and non-repudiation.
-
----
-
-## V.4 Canonical Encoding Requirements
-
-1. KeyMailEnvelope MUST be encoded using PQSF Deterministic CBOR.
-2. sender_signature MUST be computed over the canonical CBOR encoding with the sender_signature field omitted.
-3. Re-encoding a decoded KeyMailEnvelope MUST produce byte-identical output.
+1. MUST be PQSF Deterministic CBOR.
+2. sender_signature computed over canonical encoding with signature omitted.
+3. Re-encoding MUST be byte-identical.
 4. Non-canonical encodings MUST be rejected.
 
 ---
 
-## V.5 Key Agreement and Encryption
+## V.4 Validation Requirements
 
-### V.5.1 Ephemeral Key Agreement
+A KeyMailEnvelope is valid iff:
 
-For post-quantum key agreement:
-
-```
-(shared_secret, encapsulated_key) = ML-KEM-1024.Encapsulate(recipient_public_key)
-```
-
-The encapsulated_key MUST be transmitted alongside the KeyMailEnvelope or embedded in deployment-specific key transport.
-
-### V.5.2 Message Key Derivation
-
-```
-message_key = cSHAKE256(
-  shared_secret,
-  domain = "PQSF-KEYMAIL:message-key",
-  input  = canonical({
-    "message_id": message_id,
-    "sender_identity_ref": sender_identity_ref,
-    "recipient_identity_ref": recipient_identity_ref,
-    "issued_tick": issued_tick
-  })
-)
-```
-
-### V.5.3 Encryption
-
-```
-(ciphertext, tag) = AEAD.Encrypt(
-  key   = message_key,
-  nonce = nonce,
-  aad   = canonical({
-    "message_id": message_id,
-    "sender_identity_ref": sender_identity_ref,
-    "recipient_identity_ref": recipient_identity_ref,
-    "content_type": content_type
-  }),
-  plaintext = payload
-)
-```
+1. Structure valid
+2. Canonical encoding valid
+3. Signature verifies
+4. issued_tick ≤ current_tick < expiry_tick (when enforced)
+5. Session binding matches when present
+6. Decryption succeeds
 
 ---
 
-## V.6 Validation Requirements
+## V.5 Replay Protection
 
-A KeyMailEnvelope is valid if and only if:
-
-1. **Structural validity**: All required fields present and correctly typed
-2. **Canonical encoding**: Envelope is valid Deterministic CBOR
-3. **Signature verification**: sender_signature verifies under the sender's public key referenced by sender_identity_ref
-4. **Time validity**: issued_tick ≤ current_tick < expiry_tick (when freshness is enforced)
-5. **Session binding**: If session_id or exporter_hash is present, it matches the expected session context
-6. **Decryption success**: ciphertext decrypts successfully with valid tag
-
-Validation failure MUST NOT be silent. Implementations SHOULD report specific failure reasons for debugging.
+Replay protection is NOT inherent.
+Consumers MUST track message_id values and reject duplicates.
 
 ---
 
-## V.7 Thread Continuity
+## V.6 Conformance
 
-For multi-message exchanges:
+KeyMail-conformant implementations MUST:
 
-1. All messages in a thread MUST share the same thread_id.
-2. thread_id SHOULD be generated by the thread initiator and reused by all participants.
-3. Thread membership is determined by thread_id only; sender/recipient pairs MAY vary within a thread.
-4. Thread ordering is determined by issued_tick. Ties are broken by message_id lexicographic order.
-
----
-
-## V.8 Error Codes
-
-KeyMail defines the following error codes for validation failures:
-
-| Error Code | Meaning |
-|------------|---------|
-| E_KEYMAIL_STRUCTURE_INVALID | Required fields missing or malformed |
-| E_KEYMAIL_ENCODING_NONCANONICAL | Non-canonical CBOR encoding |
-| E_KEYMAIL_SIGNATURE_INVALID | Sender signature verification failed |
-| E_KEYMAIL_EXPIRED | Current tick ≥ expiry_tick |
-| E_KEYMAIL_FUTURE | issued_tick > current_tick |
-| E_KEYMAIL_SESSION_MISMATCH | Session binding mismatch |
-| E_KEYMAIL_DECRYPTION_FAILED | AEAD decryption or tag verification failed |
-| E_KEYMAIL_SENDER_UNKNOWN | sender_identity_ref cannot be resolved |
-| E_KEYMAIL_RECIPIENT_MISMATCH | Message not addressed to this recipient |
+* Produce canonical envelopes only
+* Verify sender_signature
+* Enforce time bounds when required
+* Implement replay protection
+* Support at least one PQ KEM (ML-KEM-1024)
 
 ---
 
-## V.9 Security Considerations
+# Annex W — Site Policy Overlay for Existing Web Systems (Normative)
 
-### V.9.1 Forward Secrecy
-
-KeyMail with ephemeral ML-KEM key agreement provides forward secrecy: compromise of long-term keys does not compromise past messages encrypted with ephemeral shared secrets.
-
-For deployments requiring forward secrecy, implementations MUST:
-- Use ephemeral key encapsulation per message or per session
-- Securely delete ephemeral key material after use
-
-### V.9.2 Replay Protection
-
-KeyMail envelopes are self-describing and time-bounded, but replay protection is NOT inherent.
-
-Consuming systems MUST:
-- Track seen message_id values within a deployment scope
-- Reject duplicate message_id submissions
-- Consider expiry_tick when determining replay window
-
-### V.9.3 Metadata Protection
-
-KeyMail encrypts message content but does NOT encrypt:
-- sender_identity_ref
-- recipient_identity_ref
-- issued_tick / expiry_tick
-- thread_id
-- content_type
-
-Deployments with metadata confidentiality requirements MUST use additional transport-layer encryption (e.g., TLS, onion routing) or wrap KeyMailEnvelope in an outer EBTEnvelope.
-
-### V.9.4 Non-Authority Reinforcement
-
-Implementations MUST NOT:
-- Interpret KeyMailEnvelope receipt as consent
-- Trigger Authoritative operations based on message content without separate ConsentProof
-- Propagate custody or signing authority through KeyMail
-- Treat sender_signature as equivalent to ConsentProof signature
+Status: OPTIONAL
+Scope: Discovery and policy attestation only
+Authority: NONE
 
 ---
 
-## V.10 Reference Implementation
+## W.1 Purpose and Scope
 
-```python
-from dataclasses import dataclass
-from typing import Optional
-import os
+Defines a domain-controlled policy overlay using existing web infrastructure.
+Defines evidence only. Grants no authority.
 
-@dataclass(frozen=True)
-class KeyMailEnvelope:
-    message_id: str
-    thread_id: Optional[str]
-    sender_identity_ref: str
-    recipient_identity_ref: str
-    issued_tick: int
-    expiry_tick: int
-    session_id: Optional[str]
-    exporter_hash: Optional[bytes]
-    content_type: str
-    ciphertext: bytes
-    nonce: bytes
-    tag: bytes
-    suite_profile: str
-    sender_signature: bytes
+---
 
+## W.2 Authority Boundary
 
-def create_keymail(
-    sender_identity_ref: str,
-    recipient_identity_ref: str,
-    payload: bytes,
-    content_type: str,
-    issued_tick: int,
-    expiry_tick: int,
-    sender_signing_key,
-    recipient_public_key,
-    suite_profile: str,
-    thread_id: Optional[str] = None,
-    session_id: Optional[str] = None,
-    exporter_hash: Optional[bytes] = None
-) -> KeyMailEnvelope:
-    """
-    Create a KeyMailEnvelope.
-    """
-    import uuid
-    
-    message_id = str(uuid.uuid4())
-    
-    # Key agreement (ML-KEM-1024)
-    shared_secret, encapsulated_key = ml_kem_1024_encapsulate(recipient_public_key)
-    
-    # Derive message key
-    key_context = canonical_cbor_encode({
-        "message_id": message_id,
-        "sender_identity_ref": sender_identity_ref,
-        "recipient_identity_ref": recipient_identity_ref,
-        "issued_tick": issued_tick
-    })
-    message_key = cshake256(
-        shared_secret,
-        domain=b"PQSF-KEYMAIL:message-key",
-        input=key_context,
-        output_length=32
-    )
-    
-    # Generate nonce
-    nonce = os.urandom(12)  # 96 bits for AES-256-GCM
-    
-    # Prepare AAD
-    aad = canonical_cbor_encode({
-        "message_id": message_id,
-        "sender_identity_ref": sender_identity_ref,
-        "recipient_identity_ref": recipient_identity_ref,
-        "content_type": content_type
-    })
-    
-    # Encrypt
-    ciphertext, tag = aes_256_gcm_encrypt(
-        key=message_key,
-        nonce=nonce,
-        plaintext=payload,
-        aad=aad
-    )
-    
-    # Build envelope without signature
-    envelope_data = {
-        "message_id": message_id,
-        "thread_id": thread_id,
-        "sender_identity_ref": sender_identity_ref,
-        "recipient_identity_ref": recipient_identity_ref,
-        "issued_tick": issued_tick,
-        "expiry_tick": expiry_tick,
-        "session_id": session_id,
-        "exporter_hash": exporter_hash,
-        "content_type": content_type,
-        "ciphertext": ciphertext,
-        "nonce": nonce,
-        "tag": tag,
-        "suite_profile": suite_profile
-    }
-    
-    # Sign
-    signing_payload = canonical_cbor_encode(envelope_data)
-    sender_signature = sign(sender_signing_key, signing_payload, suite_profile)
-    
-    return KeyMailEnvelope(
-        message_id=message_id,
-        thread_id=thread_id,
-        sender_identity_ref=sender_identity_ref,
-        recipient_identity_ref=recipient_identity_ref,
-        issued_tick=issued_tick,
-        expiry_tick=expiry_tick,
-        session_id=session_id,
-        exporter_hash=exporter_hash,
-        content_type=content_type,
-        ciphertext=ciphertext,
-        nonce=nonce,
-        tag=tag,
-        suite_profile=suite_profile,
-        sender_signature=sender_signature
-    )
+1. MUST NOT grant authority
+2. MUST NOT imply correctness
+3. Failure evaluates to UNAVAILABLE
+4. No ALLOW semantics permitted
 
+---
 
-def validate_keymail(
-    envelope: KeyMailEnvelope,
-    current_tick: int,
-    sender_public_key,
-    expected_session_id: Optional[str] = None,
-    expected_exporter_hash: Optional[bytes] = None,
-    seen_message_ids: Optional[set] = None
-) -> tuple[bool, Optional[str]]:
-    """
-    Validate a KeyMailEnvelope.
-    Returns (valid, error_code).
-    """
-    # Check replay
-    if seen_message_ids is not None:
-        if envelope.message_id in seen_message_ids:
-            return False, "E_KEYMAIL_REPLAY"
-    
-    # Check time bounds
-    if envelope.issued_tick > current_tick:
-        return False, "E_KEYMAIL_FUTURE"
-    
-    if current_tick >= envelope.expiry_tick:
-        return False, "E_KEYMAIL_EXPIRED"
-    
-    # Check session binding
-    if expected_session_id is not None and envelope.session_id != expected_session_id:
-        return False, "E_KEYMAIL_SESSION_MISMATCH"
-    
-    if expected_exporter_hash is not None and envelope.exporter_hash != expected_exporter_hash:
-        return False, "E_KEYMAIL_SESSION_MISMATCH"
-    
-    # Verify signature
-    envelope_data = {
-        "message_id": envelope.message_id,
-        "thread_id": envelope.thread_id,
-        "sender_identity_ref": envelope.sender_identity_ref,
-        "recipient_identity_ref": envelope.recipient_identity_ref,
-        "issued_tick": envelope.issued_tick,
-        "expiry_tick": envelope.expiry_tick,
-        "session_id": envelope.session_id,
-        "exporter_hash": envelope.exporter_hash,
-        "content_type": envelope.content_type,
-        "ciphertext": envelope.ciphertext,
-        "nonce": envelope.nonce,
-        "tag": envelope.tag,
-        "suite_profile": envelope.suite_profile
-    }
-    signing_payload = canonical_cbor_encode(envelope_data)
-    
-    if not verify_signature(sender_public_key, signing_payload, envelope.sender_signature, envelope.suite_profile):
-        return False, "E_KEYMAIL_SIGNATURE_INVALID"
-    
-    # Track message_id
-    if seen_message_ids is not None:
-        seen_message_ids.add(envelope.message_id)
-    
-    return True, None
+## W.3 Discovery Endpoints
 
+Required:
 
-def decrypt_keymail(
-    envelope: KeyMailEnvelope,
-    recipient_private_key,
-    encapsulated_key: bytes
-) -> tuple[Optional[bytes], Optional[str]]:
-    """
-    Decrypt a KeyMailEnvelope payload.
-    Returns (plaintext, error_code).
-    """
-    # Decapsulate shared secret
-    shared_secret = ml_kem_1024_decapsulate(recipient_private_key, encapsulated_key)
-    
-    # Derive message key
-    key_context = canonical_cbor_encode({
-        "message_id": envelope.message_id,
-        "sender_identity_ref": envelope.sender_identity_ref,
-        "recipient_identity_ref": envelope.recipient_identity_ref,
-        "issued_tick": envelope.issued_tick
-    })
-    message_key = cshake256(
-        shared_secret,
-        domain=b"PQSF-KEYMAIL:message-key",
-        input=key_context,
-        output_length=32
-    )
-    
-    # Prepare AAD
-    aad = canonical_cbor_encode({
-        "message_id": envelope.message_id,
-        "sender_identity_ref": envelope.sender_identity_ref,
-        "recipient_identity_ref": envelope.recipient_identity_ref,
-        "content_type": envelope.content_type
-    })
-    
-    # Decrypt
-    try:
-        plaintext = aes_256_gcm_decrypt(
-            key=message_key,
-            nonce=envelope.nonce,
-            ciphertext=envelope.ciphertext,
-            tag=envelope.tag,
-            aad=aad
-        )
-        return plaintext, None
-    except Exception:
-        return None, "E_KEYMAIL_DECRYPTION_FAILED"
+* `/.well-known/pq/policy-key`
+* `/.well-known/pq/privacy`
+
+Optional:
+
+* `/.well-known/pq/revocations`
+
+---
+
+## W.4 SitePolicyKeyDescriptor
+
+```cddl
+SitePolicyKeyDescriptor = {
+  descriptor_version: uint,
+  domain: tstr,
+  policy_key_id: tstr,
+  policy_pubkey: bstr,
+  suite_profile: tstr,
+  issued_tick: uint,
+  expiry_tick: uint / null,
+  previous_key_id: tstr / null,
+  proof: DomainControlProof,
+  signature: bstr
+}
+```
+
+Encoding MUST be canonical CBOR.
+domain MUST be lowercase ASCII.
+
+---
+
+## W.5 DomainControlProof
+
+```cddl
+DomainControlProof = {
+  method: "HTTPS-WELLKNOWN" / "DNS-TXT" / "SMIMEA-FUTURE",
+  proof_id: tstr,
+  proof_value: bstr,
+  observed_at_tick: uint,
+  observed_by: tstr
+}
+```
+
+Failure evaluates to UNAVAILABLE.
+
+---
+
+## W.6 PrivacySiteDeclaration
+
+```cddl
+PrivacySiteDeclaration = {
+  declaration_version: uint,
+  domain: tstr,
+  site_id: tstr,
+  policy_key_id: tstr,
+  declared_capabilities: [* tstr],
+  exclusions: [* tstr],
+  issued_tick: uint,
+  expiry_tick: uint / null,
+  suite_profile: tstr,
+  signature: bstr
+}
 ```
 
 ---
 
-## V.11 Test Vector Requirements
+## W.7 Revocation
 
-Implementations MUST provide test vectors demonstrating:
-
-- ☐ KeyMailEnvelope round-trip (encode → decode → encode produces identical bytes)
-- ☐ Signature verification success with valid sender key
-- ☐ Signature verification failure with wrong sender key
-- ☐ Decryption success with correct recipient key
-- ☐ Decryption failure with wrong recipient key
-- ☐ Rejection of expired messages (current_tick ≥ expiry_tick)
-- ☐ Rejection of future-dated messages (issued_tick > current_tick)
-- ☐ Session binding enforcement when exporter_hash is present
-- ☐ Replay detection via message_id tracking
+Revocation invalidates artefacts from issued_tick onward.
+Revocation of keys does NOT revoke prior declarations.
 
 ---
 
-## V.12 Conformance
+# Annex X — Transport and Session Binding Overlay (Normative)
 
-An implementation is KeyMail-conformant if it:
-
-1. Produces only canonical CBOR KeyMailEnvelope artefacts
-2. Validates all required fields before processing
-3. Verifies sender_signature before trusting message content
-4. Enforces time bounds when freshness is required
-5. Does NOT interpret KeyMailEnvelope as authority, consent, or execution capability
-6. Implements replay protection via message_id tracking
-7. Supports at least one post-quantum key agreement scheme (ML-KEM-1024)
+Status: OPTIONAL
+Scope: Transport/session binding only
+Authority: NONE
 
 ---
 
-*KeyMail provides secure message transport only. All authority and enforcement semantics are defined by PQSEC.*
+## X.1 TLS Exporter Binding
+
+Exporter context MUST include:
+
+```cddl
+{
+  pqsf_version: tstr,
+  session_id: tstr,
+  suite_profile: tstr,
+  bound_hashes: [* bstr]
+}
+```
+
+---
+
+## X.2 SessionBinding Artefact
+
+```cddl
+SessionBinding = {
+  session_id: tstr,
+  exporter_hash: bstr,
+  bound_hashes: [* bstr],
+  issued_tick: uint,
+  expiry_tick: uint / null,
+  suite_profile: tstr,
+  signature: bstr
+}
+```
+
+Mismatch or expiry evaluates to UNAVAILABLE.
+
+---
+
+# Annex Y — Preflight Interaction Binding (Normative)
+
+Status: OPTIONAL
+Scope: Consent-gated preflight
+Authority: NONE
+
+---
+
+## Y.1 Transcript Commitment
+
+```cddl
+PreflightTurn = {
+  turn_index: uint,
+  speaker: "A" / "B",
+  content_hash: bstr
+}
+
+PreflightTranscript = [* PreflightTurn]
+```
+
+Transcript hash:
+
+```
+SHAKE256-256(canonical_cbor(PreflightTranscript))
+```
+
+---
+
+## Y.2 PreflightBindReceipt
+
+```cddl
+PreflightBindReceipt = {
+  preflight_version: uint,
+  session_id: tstr,
+  terms_id: tstr,
+  terms_hash: bstr,
+  transcript_hash: bstr,
+  exporter_hash: bstr / null,
+  issued_tick: uint,
+  party_role: "A" / "B",
+  suite_profile: tstr,
+  signature: bstr
+}
+```
+
+---
+
+## Y.3 Non-Goals
+
+Does not define:
+
+* evaluation models
+* ranking
+* fairness
+* UI
+
+---
+
+# Annex Z — Optional Presence and Liveness Evidence (Normative)
+
+Status: OPTIONAL
+Authority: NONE
+
+---
+
+## Z.1 PresenceProof
+
+```cddl
+PresenceProof = {
+  presence_version: uint,
+  subject_ref: tstr,
+  method: tstr,
+  issued_tick: uint,
+  expiry_tick: uint,
+  suite_profile: tstr,
+  signature: bstr
+}
+```
+
+Absence evaluates to UNAVAILABLE unless required by policy.
+
+---
+
+# Annex AA — Governance Metadata Artefact (Normative)
+
+Status: OPTIONAL
+Authority: NONE
+
+---
+
+## AA.1 GovernanceMetadata
+
+```cddl
+GovernanceMetadata = {
+  governance_version: uint,
+  governance_id: tstr,
+  participants: [* tstr],
+  threshold: uint,
+  policy_refs: [* bstr] / null,
+  issued_tick: uint,
+  expiry_tick: uint / null,
+  suite_profile: tstr,
+  signature: bstr
+}
+```
+
+Interpretation is external.
+
+---
+
+# Annex AB — Delegation Evidence Artefacts (Normative)
+
+Status: OPTIONAL
+Authority: NONE
+
+---
+
+## AB.1 DelegationGrant
+
+```cddl
+DelegationGrant = {
+  delegation_version: uint,
+  delegation_id: tstr,
+  previous_grant_id: tstr / null,
+  delegator_ref: tstr,
+  delegatee_ref: tstr,
+  scope: [* tstr],
+  caps: { * tstr => uint } / null,
+  issued_tick: uint,
+  expiry_tick: uint,
+  consent_ref: tstr / null,
+  policy_refs: [* bstr] / null,
+  exporter_hash: bstr / null,
+  suite_profile: tstr,
+  signature: bstr
+}
+```
+
+scope MUST be sorted and de-duplicated.
+caps MUST be integers only.
+
+---
+
+## AB.2 DelegationRevocation
+
+```cddl
+DelegationRevocation = {
+  revocation_version: uint,
+  delegation_id: tstr,
+  reason: tstr / null,
+  issued_tick: uint,
+  suite_profile: tstr,
+  signature: bstr
+}
+```
+
+Valid revocation invalidates the grant from issued_tick onward.
 
 ---
 
