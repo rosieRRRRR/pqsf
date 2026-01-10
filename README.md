@@ -2974,20 +2974,59 @@ Does not define:
 
 ---
 
-# Annex Z — Optional Presence and Liveness Evidence (Normative)
+Yes.
+You should **update Annex Z in place**, not add anything new elsewhere.
 
-Status: OPTIONAL
-Authority: NONE
+Nothing else in PQSF needs to change.
+No new annex, no new spec, no cross-spec bleed.
+
+What you do is **replace the current minimal Annex Z** with the strengthened version you iterated to. That keeps numbering stable, avoids churn, and preserves all existing references.
+
+Below is the **drop-in replacement for Annex Z only**, publication-ready, with the improvements agreed:
 
 ---
 
-## Z.1 PresenceProof
+# Annex Z — Optional Presence and Liveness Evidence (Normative)
+
+**Status:** OPTIONAL  
+**Authority:** NONE
+
+---
+
+## Z.1 Purpose and Scope
+
+This annex defines **PresenceProof**, an ephemeral, evidence-only artefact used to attest that a live human was present at the moment an action was initiated.
+
+PresenceProof:
+
+- is non-identifying
+- is non-transferable
+- is short-lived
+- grants no authority
+- conveys no identity, uniqueness, or eligibility
+- is evaluated exclusively by consuming specifications (e.g. PQSEC)
+
+This annex defines structure and validation rules only.
+
+---
+
+## Z.2 Authority Boundary
+
+1. PresenceProof MUST NOT be interpreted as identity, uniqueness, eligibility, or authorization.
+2. PresenceProof MUST NOT grant permission, capability, or access.
+3. PresenceProof MUST NOT be persisted as a long-lived credential.
+4. Absence, expiry, or failure of PresenceProof MUST evaluate to UNAVAILABLE unless explicitly required by policy.
+5. No construct in this annex may emit ALLOW semantics.
+
+---
+
+## Z.3 PresenceProof Artefact (Normative)
 
 ```cddl
 PresenceProof = {
-  presence_version: uint,
-  subject_ref: tstr,
-  method: tstr,
+  presence_version: uint,            ; MUST be 1
+  subject_ref: tstr .size(1..200),   ; opaque, user-controlled reference
+  method: tstr .size(1..64),         ; descriptive only
   issued_tick: uint,
   expiry_tick: uint,
   suite_profile: tstr,
@@ -2995,7 +3034,134 @@ PresenceProof = {
 }
 ```
 
-Absence evaluates to UNAVAILABLE unless required by policy.
+---
+
+## Z.3.1 Validity Window (Normative)
+
+PresenceProof is intended to be short-lived.
+
+* For high-risk operations:
+
+  * `expiry_tick - issued_tick` SHOULD be ≤ 2 ticks.
+* For lower-risk operations:
+
+  * Longer windows MAY be accepted.
+  * Any extension beyond 2 ticks MUST be explicitly declared by policy.
+
+Implementations MAY enforce stricter limits.
+
+---
+
+## Z.4 Field Semantics
+
+### presence_version
+
+* MUST be 1.
+* Unknown versions MUST be rejected.
+
+### subject_ref
+
+* An opaque reference supplied by the producer.
+* PQSF does not interpret, resolve, or validate this value.
+
+### method
+
+* Describes the local presence method used.
+* Method values are descriptive only and carry no trust semantics.
+
+### issued_tick / expiry_tick
+
+* Define the validity window.
+* Expiry MUST be enforced by consumers.
+
+### suite_profile
+
+* References a signature-class CryptoSuiteProfile.
+
+### signature
+
+* Computed over canonical CBOR encoding with the signature field omitted.
+
+---
+
+## Z.4.1 Method Values (Informative)
+
+Example method strings:
+
+* `local-liveness-v1`
+* `neural-lock`
+* `hardware-token`
+
+Method strings:
+
+* SHOULD use lowercase-with-hyphens
+* MAY include version suffixes
+* MUST NOT include PII, device identifiers, or biometric material
+* MUST NOT be interpreted as trust signals
+
+---
+
+## Z.4.2 Signature Computation (Normative)
+
+Signature generation:
+
+1. Construct PresenceProof with all fields except `signature`.
+2. Encode using canonical CBOR per PQSF Section 7.2.
+3. Compute `signature = Sign(canonical_bytes, private_key)`.
+4. Append `signature` field.
+5. Re-encode the full structure canonically.
+
+Signature verification:
+
+1. Extract the `signature` field.
+2. Reconstruct the structure without `signature`.
+3. Encode using canonical CBOR per PQSF Section 7.2.
+4. Verify `signature` against canonical bytes and public key.
+
+---
+
+## Z.5 Validation Rules (Normative)
+
+A PresenceProof is valid iff:
+
+1. Canonical CBOR encoding per PQSF Section 7.2 is valid.
+2. `presence_version == 1`.
+3. Signature verifies under `suite_profile`.
+4. `issued_tick ≤ current_tick < expiry_tick`.
+5. No unknown fields are present.
+
+Any failure MUST evaluate to UNAVAILABLE.
+
+---
+
+## Z.6 Non-Goals (Normative)
+
+This annex does NOT define:
+
+* identity systems
+* proof of uniqueness
+* biometric exchange
+* issuer trust models
+* delegation or consent semantics
+* recovery or persistence mechanisms
+* governance or policy interpretation
+
+PresenceProof is momentary evidence only.
+
+```
+
+---
+
+**Net effect:**
+
+- One annex updated.
+- No renumbering.
+- No new dependencies.
+- No epoch-clock semantics added.
+- No scope creep.
+- Cleanly stronger than the original.
+
+This is the correct move.
 
 ---
 
@@ -3075,6 +3241,8 @@ DelegationRevocation = {
 Valid revocation invalidates the grant from issued_tick onward.
 
 ---
+
+
 
 Changelog
 Version 2.0.2 (Current)
