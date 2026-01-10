@@ -108,6 +108,7 @@ PQSF provides the foundational protocol primitives for the PQ stack: canonical e
   - [Annex Z — Optional Presence and Liveness Evidence (Normative)](#annex-z--optional-presence-and-liveness-evidence-normative)
   - [Annex AA — Governance Metadata Artefact (Normative)](#annex-aa--governance-metadata-artefact-normative)
   - [Annex AB — Delegation Evidence Artefacts (Normative)](#annex-ab--delegation-evidence-artefacts-normative)
+  - [Annex AC — Optional Commitment Evidence (Normative)](#annex-ac--optional-commitment-evidence-normative)
 
 - [Changelog](#changelog)
 - [Acknowledgements (Informative)](#acknowledgements-informative)
@@ -3242,7 +3243,187 @@ Valid revocation invalidates the grant from issued_tick onward.
 
 ---
 
+Below is the **publication-ready, drop-in annex**, with **correct numbering**, **no omissions**, **no renumber collisions**, and **no changes required elsewhere** beyond adding it to the Annex Index and Normative Annex list.
 
+You can paste this verbatim into PQSF.
+
+---
+
+## Annex AC — Optional Commitment Evidence (Normative)
+
+**Status:** OPTIONAL
+**Authority:** NONE
+
+---
+
+### AC.1 Purpose and Scope
+
+This annex defines **CommitProof**, an optional, evidence-only artefact used to commit to a secret or internal state at a specific moment **without revealing the committed material**.
+
+CommitProof enables verifiable pre-commitment while preserving secrecy. It is suitable for workflows that require later disclosure, correlation, or challenge without granting authority at commit time.
+
+This annex defines **structure and validation only**.
+Interpretation, enforcement, disclosure policy, and follow-on semantics are defined exclusively by consuming specifications.
+
+---
+
+### AC.2 Authority Boundary
+
+1. CommitProof MUST NOT be interpreted as identity, authorization, ownership, eligibility, or delegation.
+2. CommitProof MUST NOT grant access, capability, or permission.
+3. CommitProof MUST NOT be treated as proof of execution, intent fulfilment, or correctness.
+4. Absence, expiry, or failure of CommitProof MUST evaluate to **UNAVAILABLE** unless explicitly required by policy.
+5. No construct in this annex may emit ALLOW semantics.
+
+CommitProof is **evidence only**.
+
+---
+
+### AC.3 CommitProof Artefact (Normative)
+
+```cddl
+CommitProof = {
+  commit_version: uint,                 ; MUST be 1
+  commitment: bstr,                     ; cSHAKE256(secret || salt, "PQSF-COMMITPROOF-v1")
+  subject_ref: tstr .size(1..200),      ; opaque reference
+  method: tstr .size(1..64),            ; descriptive only
+  issued_tick: uint,
+  expiry_tick: uint,
+  suite_profile: tstr,                  ; signature-class CryptoSuiteProfile
+  signature: bstr
+}
+```
+
+---
+
+### AC.3.1 Validity Window (Normative)
+
+1. `expiry_tick` MUST be greater than `issued_tick`.
+2. For high-risk operations:
+
+   * `expiry_tick - issued_tick` SHOULD be ≤ 2 ticks.
+3. Longer validity windows MAY be used only when explicitly permitted by policy.
+4. `current_tick` is supplied by the consuming specification.
+
+---
+
+### AC.4 Field Semantics
+
+#### commit_version
+
+* MUST be `1`.
+* Unknown versions MUST be rejected.
+
+#### commitment
+
+* A cryptographic commitment to secret material.
+* Commitment input MUST be:
+
+```
+cSHAKE256(secret || salt, "PQSF-COMMITPROOF-v1")
+```
+
+* `secret` MAY be any byte sequence.
+* `salt` MUST be **32 bytes** of cryptographically secure randomness.
+* The salt MUST be stored securely alongside the secret and MUST NOT be derivable from the commitment.
+
+#### subject_ref
+
+* Opaque reference supplied by the producer.
+* PQSF does not interpret, resolve, or dereference this value.
+
+#### method
+
+* Descriptive identifier for the commitment method used.
+* Method values carry **no trust semantics**.
+
+#### issued_tick / expiry_tick
+
+* Define the validity window.
+* Freshness enforcement is external to PQSF.
+
+#### suite_profile
+
+* References a **signature-class CryptoSuiteProfile**.
+
+#### signature
+
+* Computed over canonical CBOR encoding with the `signature` field omitted.
+
+---
+
+### AC.4.1 Method Values (Informative)
+
+Example method strings:
+
+* `pqwit-v1`
+* `pqwit-sealed-v1`
+* `hash-precommit`
+
+Method strings:
+
+* SHOULD use lowercase-with-hyphens
+* MAY include version suffixes
+* MUST NOT contain PII, device identifiers, or biometric material
+* MUST NOT be interpreted as routing, eligibility, or trust signals
+
+---
+
+### AC.4.2 Signature Computation (Normative)
+
+**Signing:**
+
+1. Construct CommitProof with all fields except `signature`.
+2. Encode using PQSF canonical CBOR (Section 7.2).
+3. Compute:
+
+```
+signature = Sign(canonical_bytes, signing_key)
+```
+
+4. Append the `signature` field.
+5. Re-encode the complete structure canonically.
+
+**Verification:**
+
+1. Extract the `signature` field.
+2. Reconstruct the structure without `signature`.
+3. Encode using PQSF canonical CBOR (Section 7.2).
+4. Verify `signature` against canonical bytes under `suite_profile`.
+
+---
+
+### AC.5 Validation Rules (Normative)
+
+A CommitProof is valid evidence iff:
+
+1. Canonical CBOR encoding per PQSF Section 7.2 is valid.
+2. `commit_version == 1`.
+3. Signature verification succeeds under `suite_profile`.
+4. `issued_tick ≤ current_tick < expiry_tick`.
+5. `subject_ref` and `method` satisfy size constraints.
+6. No unknown fields are present.
+
+Any failure MUST evaluate to **UNAVAILABLE**.
+
+---
+
+### AC.6 Non-Goals (Normative)
+
+This annex does NOT define:
+
+* secret storage requirements
+* disclosure or reveal mechanisms
+* revocation semantics
+* identity systems
+* uniqueness proofs
+* reputation, scoring, or ranking
+* blockchain anchoring or timestamping
+* enforcement, admission, or refusal semantics
+
+CommitProof is **non-revealing, non-authoritative evidence only**.
+
+---
 
 Changelog
 Version 2.0.2 (Current)
